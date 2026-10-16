@@ -1,4 +1,4 @@
-/* Eventi e luoghi a misura di bebè intorno a Montecchio Maggiore.
+/* Eventi e luoghi a misura di bebè entro circa 50 km da Montecchio Maggiore.
    Aggiornato al 16 ottobre 2026. Le date vanno sempre verificate sul sito dell'organizzatore.
    start/end: date ISO; when: testo libero se la data non è ancora confermata;
    km: distanza indicativa da Montecchio Maggiore; q: ricerca per le mappe. */
@@ -12,6 +12,38 @@ window.EVENTS = [
     desc: "Festa di paese con cucina tradizionale, musica e processione. Bella per una passeggiata col passeggino: tieniti lontano dalle casse, perché le orecchie dei piccoli sono delicate.",
     link: "https://www.itinerarinelgusto.it/sagre-e-feste/veneto/montecchio-maggiore-vi", status: "da verificare",
     q: "Sant'Urbano Montecchio Maggiore"
+  },
+  {
+    id: "a-corpo-libero-2026", t: "«A corpo libero»: teatro per piccolissimi", e: "🎪",
+    start: "2026-10-24", end: "", time: "10:00 e 16:00",
+    place: "Teatro Yurta (La Piccionaia)", town: "Vicenza", km: 13, age: "Da 1 a 4 anni",
+    desc: "Spettacolo de La Baracca – Testoni Ragazzi dentro il festival Stardust de La Piccionaia. Uno dei pochi pensati proprio per i più piccoli. Di solito i posti sono pochi: prenota per tempo.",
+    link: "https://www.altrevelocita.it/stardust-festival-la-piccionaia-vicenza-2026/", status: "da verificare",
+    q: "Teatro Astra Vicenza"
+  },
+  {
+    id: "mille-bolle-verona-2026", t: "«Le Mille Bolle Incantate» – Famiglie a Teatro", e: "🫧",
+    start: "2026-10-25", end: "", time: "Pomeriggio (orario sul sito)",
+    place: "Fondazione Aida (Teatro Stimate / Teatro Nuovo)", town: "Verona", km: 45, age: "Gratis sotto i 3 anni · età da verificare",
+    desc: "Primo spettacolo della 44ª rassegna «Famiglie a Teatro». Le bolle di sapone incantano anche i bebè. Sotto i 3 anni l'ingresso è gratuito.",
+    link: "https://www.fondazioneaida.it/spazio/teatro-stimate/", status: "da verificare",
+    q: "Teatro Stimate Verona"
+  },
+  {
+    id: "sdeng-2026", t: "«Sdeng!» – teatro per la prima infanzia", e: "🔧",
+    start: "2026-10-28", end: "2026-10-29", time: "28/10 ore 10:45 e 12:00 · 29/10 ore 17:00",
+    place: "Centro Zona 3", town: "Vicenza", km: 13, age: "Prima infanzia",
+    desc: "«Storia di un inventore che non sa stare fermo», di Alessandro Maione, nel festival Stardust. Un breve spettacolo pensato per i più piccoli.",
+    link: "https://www.altrevelocita.it/stardust-festival-la-piccionaia-vicenza-2026/", status: "da verificare",
+    q: "Centro Zona 3 Vicenza"
+  },
+  {
+    id: "festival-ragazzi-padova-2026", t: "Festival nazionale del teatro per i ragazzi", e: "🎭",
+    start: "2026-09-26", end: "2026-11-29", time: "Sabato 16:00 · domenica 10:30 e 16:00",
+    place: "Piccolo Teatro Don Bosco, via Asolo 2", town: "Padova", km: 48, age: "Età diverse: controlla ogni spettacolo",
+    desc: "Ogni weekend fino al 29 novembre, biglietto intorno ai 7 €. Scegli gli spettacoli della domenica mattina, che di solito sono i più adatti ai piccoli.",
+    link: "https://padovacultura.padovanet.it/it/manifestazioni-questo-mese", status: "da verificare",
+    q: "Piccolo Teatro Don Bosco via Asolo 2 Padova"
   },
   {
     id: "ora-ti-racconto-nov", t: "«Ora ti racconto»: letture animate in biblioteca", e: "📖",
@@ -46,6 +78,22 @@ window.EVENTS = [
     q: "Asiago centro"
   },
   {
+    id: "presepi-verona-2026", t: "Presepi dal Mondo", e: "🌟",
+    start: "2026-11-14", end: "2027-01-17", time: "",
+    place: "Centro", town: "Verona", km: 45, age: "Per tutta la famiglia",
+    desc: "Una grande mostra di presepi da tutto il mondo. Al bimbo piacciono luci e figure; per la folla del weekend è più comoda la fascia del passeggino.",
+    link: "https://dovevado.net/mercatini-di-natale-verona/", status: "da verificare",
+    q: "Verona centro storico"
+  },
+  {
+    id: "opera-baby-2027", t: "Opera Baby: «Figaro giù, Figaro su!»", e: "🎶",
+    start: "2027-04-18", end: "", time: "10:00 e 11:15",
+    place: "Teatro Comunale", town: "Vicenza", km: 13, age: "Da 6 a 36 mesi, con i genitori",
+    desc: "L'opera lirica raccontata ai piccolissimi in 40 minuti, liberamente ispirata al Barbiere di Siviglia. È proprio per la sua età: segnatelo, i biglietti di solito vanno a ruba.",
+    link: "https://www.tcvi.it/it/eventi/stagione/family-show/figaro-giu-figaro-su/", status: "confermato",
+    q: "Teatro Comunale Vicenza"
+  },
+  {
     id: "natale-vicenza-2026", t: "Natale a Vicenza: villaggio e mercatini", e: "✨",
     start: "", end: "", when: "Da fine novembre al 6 gennaio (date 2026 da confermare)",
     place: "Piazza Biade e centro storico", town: "Vicenza", km: 13, age: "Per tutta la famiglia",
@@ -76,6 +124,30 @@ window.EVENTS = [
     desc: "Un percorso fiabesco con gnomi, elfi e il Grinch dentro le antiche cave di pietra (le Priare). Le visite sono a gruppi. Nelle grotte fa fresco: meglio la fascia o il marsupio, e vestiti a strati.",
     link: "https://www.comune.montecchio-maggiore.vi.it/it/eventi/la-vera-dimora-di-babbo-natale-694848", status: "date da confermare",
     q: "Priare via Castelli 4 Martiri Montecchio Maggiore"
+  },
+  {
+    id: "mercatini-verona-2026", t: "Mercatini di Natale di Verona", e: "🎄",
+    start: "", end: "", when: "Da fine novembre a fine dicembre (date 2026 da confermare)",
+    place: "Centro storico", town: "Verona", km: 45, age: "Per tutta la famiglia",
+    desc: "Casette di legno, luci e dolci in centro. Nei weekend c'è molta gente: con il passeggino sono meglio i giorni feriali o la mattina presto.",
+    link: "https://www.tuttomercatinidinatale.it/mercatini-natale-verona.html", status: "date da confermare",
+    q: "Piazza dei Signori Verona"
+  },
+  {
+    id: "santa-lucia-verona-2026", t: "Bancarelle di Santa Lucia", e: "🍭",
+    start: "", end: "", when: "Intorno al 13 dicembre (date 2026 da confermare)",
+    place: "Piazza Bra", town: "Verona", km: 45, age: "Per tutta la famiglia",
+    desc: "Una tradizione molto sentita a Verona: Santa Lucia porta i doni ai bambini la notte del 12 dicembre, e in piazza Bra arrivano le bancarelle di dolci e giocattoli.",
+    link: "https://www.theveronastay.it/news/mercatini-natale-verona-2025-ora-blu-stesso-url-della-pagina-esistente.html", status: "date da confermare",
+    q: "Piazza Bra Verona"
+  },
+  {
+    id: "natale-bassano-2026", t: "Natale a Bassano", e: "🚂",
+    start: "", end: "", when: "Dicembre 2026 (programma da confermare)",
+    place: "Piazza Libertà, piazza Garibaldi, Castello degli Ezzelini", town: "Bassano del Grappa", km: 45, age: "Per tutta la famiglia",
+    desc: "Mercatini in centro, il Trenino Lillipuziano e il «Sentiero incantato di Babbo Natale» al Castello degli Ezzelini. Nel 2025 c'erano anche letture animate e laboratori.",
+    link: "https://www.bassanodascoprire.com/eventi/mercatini-di-natale-di-bassano", status: "date da confermare",
+    q: "Piazza Libertà Bassano del Grappa"
   },
   {
     id: "ora-ti-racconto-dic", t: "«Ora ti racconto»: letture di dicembre", e: "📖",
@@ -132,6 +204,18 @@ window.PLACES = [
     link: "", q: "Lago di Fimon Arcugnano"
   },
   {
+    id: "biblioteca-valdagno", t: "Biblioteca civica Villa Valle – Valdagno", e: "📖", cat: "Servizi",
+    addr: "Villa Valle, Valdagno", tel: "", km: 18,
+    desc: "Da ottobre 2026 sono ripartite le letture ad alta voce dei volontari, e c'è anche «Letture Cucù», un ciclo di 3 incontri per bambini da 0 a 36 mesi. Chiedi le date in biblioteca.",
+    link: "https://bibliotecavaldagno.it/", q: "Biblioteca civica Villa Valle Valdagno"
+  },
+  {
+    id: "famiglie-teatro-verona", t: "Famiglie a Teatro – Fondazione Aida", e: "🎟️", cat: "Cultura",
+    addr: "Teatro Stimate, Teatro Nuovo e Nuovo San Michele, Verona", tel: "", km: 45,
+    desc: "Rassegna di spettacoli per famiglie dal 25 ottobre 2026 al 4 aprile 2027. Sotto i 3 anni si entra gratis. C'è anche una tessera a scalare per tutta la stagione.",
+    link: "https://www.fondazioneaida.it/", q: "Teatro Stimate Verona"
+  },
+  {
     id: "piccionaia", t: "La Piccionaia – teatro per famiglie", e: "🎭", cat: "Cultura",
     addr: "Teatro Astra e altri teatri del Vicentino", tel: "", km: 13,
     desc: "La compagnia teatrale vicentina che organizza spettacoli per famiglie, alcuni dedicati ai piccolissimi (dai 12-18 mesi). Tieni d'occhio il calendario.",
@@ -147,5 +231,10 @@ window.EVENT_SOURCES = [
   { t: "EasyVi – eventi a Vicenza e provincia", link: "https://easyvi.it/eventi/" },
   { t: "La Piccionaia – eventi per famiglie", link: "https://www.piccionaia.org/centro-teatrale-piccionaia/calendario/eventi-per-famiglie/" },
   { t: "Comune di Arzignano – eventi", link: "https://www.comune.arzignano.vi.it/home/vivere/eventi.html" },
+  { t: "Teatro Comunale di Vicenza – calendario", link: "https://www.tcvi.it/en/events/events-calendar/" },
+  { t: "Fondazione Aida (Verona) – Famiglie a Teatro", link: "https://www.fondazioneaida.it/" },
+  { t: "Verona – eventi (VisitVerona)", link: "https://www.visitverona.it/it/eventi" },
+  { t: "Padova Cultura – manifestazioni del mese", link: "https://padovacultura.padovanet.it/it/manifestazioni-questo-mese" },
+  { t: "Biblioteca di Valdagno", link: "https://bibliotecavaldagno.it/" },
   { t: "Nati per Leggere", link: "https://www.natiperleggere.it/" }
 ];

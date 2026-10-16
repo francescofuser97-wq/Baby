@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "1.0.0";
+  const VERSION = "1.1.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -18,6 +18,7 @@
   let ready = S.get("ready", {});
   let done = S.get("done", {});
   let myEvents = S.get("myEvents", []);
+  let evKm = S.get("evKm", 50);
   const ui = { rAge: "ora", rCat: "tutte", rSeason: false, rFav: false, rQ: "", aArea: "tutte", aAll: false, playTab: "giochi", evTab: "prossimi", fQ: "", openCats: {} };
 
   /* ---------------- Utility ---------------- */
@@ -199,12 +200,15 @@
   function activitiesForAge(m) { return ACTIVITIES.filter(a => a.min <= m && a.max >= m); }
   function tipsForAge(m) { const mm = Math.max(4, m); return TIPS.filter(t => t.min <= mm && t.max >= mm); }
 
+  const withinKm = e => evKm === 0 || e.km == null || e.km === "" || e.km <= evKm;
+  const isOngoing = e => e.start && e.end && parseISO(e.start) <= today0();
+
   function upcomingEvents() {
     const t = today0();
     const official = EVENTS.filter(e => e.start).map(e => Object.assign({ mine: false }, e));
     const mine = myEvents.map(e => Object.assign({ mine: true, e: "⭐" }, e));
     return official.concat(mine)
-      .filter(e => e.start && parseISO(e.end || e.start) >= t)
+      .filter(e => e.start && parseISO(e.end || e.start) >= t && withinKm(e))
       .sort((a, b) => a.start.localeCompare(b.start));
   }
 
@@ -224,7 +228,8 @@
     const seasonal = recPool.filter(r => !r.seasons.length || r.seasons.includes(season()));
     const rec = pick(seasonal.length ? seasonal : recPool, 3);
     const act = pick(activitiesForAge(m), 7);
-    const evs = upcomingEvents().slice(0, 3);
+    // In "Oggi" mostra prima le novità: salta le rassegne lunghe già iniziate
+    const evs = upcomingEvents().filter(e => !(isOngoing(e) && daysBetween(parseISO(e.start), parseISO(e.end)) > 3)).slice(0, 3);
     const tried = Object.keys(foods).length;
     const alDone = KEY_ALLERGENS.filter(k => allergenIntroduced(k)).length;
 
@@ -530,7 +535,7 @@
     } else when = esc(ev.when || "Data da confermare");
     const place = [ev.place, ev.town].filter(Boolean).map(esc).join(", ");
     return `<div class="card"><div class="ev">
-      ${d ? `<div class="datebox"><b>${d.getDate()}</b><small>${MONTHS[d.getMonth()]}</small></div>` : `<div class="datebox tbd">${ev.e || "📅"}</div>`}
+      ${d ? dateBox(ev) : `<div class="datebox tbd">${ev.e || "📅"}</div>`}
       <div class="grow" style="min-width:0">
         <h3>${d ? (ev.e || "") + " " : ""}${esc(ev.t)}</h3>
         <div class="where">${when}${place ? "<br>📍 " + place : ""}${ev.km != null && ev.km !== "" ? " · " + (ev.km ? "~" + ev.km + " km" : "in paese") : ""}</div>
@@ -545,11 +550,17 @@
       </div></div></div>`;
   }
 
+  function dateBox(ev) {
+    if (isOngoing(ev)) return `<div class="datebox"><b>●</b><small>in corso</small></div>`;
+    const d = parseISO(ev.start);
+    return `<div class="datebox"><b>${d.getDate()}</b><small>${MONTHS[d.getMonth()]}${d.getFullYear() !== today0().getFullYear() ? " " + String(d.getFullYear()).slice(2) : ""}</small></div>`;
+  }
+
   function eventMini(ev) {
     const d = parseISO(ev.start);
     const when = ev.end && ev.end !== ev.start ? "fino al " + fmt(parseISO(ev.end)) : fmt(d, { weekday: "long" }) + (ev.time ? " · " + esc(ev.time) : "");
     return `<a class="card list-card" href="#/eventi">
-      <div class="datebox"><b>${d.getDate()}</b><small>${MONTHS[d.getMonth()]}</small></div>
+      ${dateBox(ev)}
       <div class="grow"><h3>${esc(ev.t)}</h3><div class="meta">${when}${ev.town || ev.place ? " · 📍 " + esc(ev.town || ev.place) : ""}</div></div></a>`;
   }
 
@@ -569,17 +580,21 @@
 
   function viewEvents() {
     const seg = (v, label) => `<button class="${ui.evTab === v ? "on" : ""}" data-act="set" data-k="evTab" data-v="${v}">${label}</button>`;
+    const kmChips = `<div class="chips">${[[15, "Entro 15 km"], [30, "Entro 30 km"], [50, "Entro 50 km"], [0, "Tutti"]]
+      .map(([v, l]) => `<button class="chip ${evKm === v ? "on" : ""}" data-act="set-km" data-v="${v}">${l}</button>`).join("")}</div>`;
+    const staleDays = daysBetween(parseISO(EVENTS_UPDATED), today0());
     let body = "";
     if (ui.evTab === "prossimi") {
       const up = upcomingEvents();
-      const tbd = EVENTS.filter(e => !e.start);
-      body = `
-        <div class="note small">📌 Elenco aggiornato al ${fmt(parseISO(EVENTS_UPDATED), { day: "numeric", month: "long", year: "numeric" })}. Prima di andare <b>controlla sempre date e orari sul sito dell'organizzatore</b>.</div>
+      const tbd = EVENTS.filter(e => !e.start && withinKm(e));
+      body = `${kmChips}
+        <div class="note small">📌 Elenco aggiornato al ${fmt(parseISO(EVENTS_UPDATED), { day: "numeric", month: "long", year: "numeric" })}${staleDays > 30 ? ` (<b>più di un mese fa</b>: guarda anche le <a href="#/eventi" data-act="set" data-k="evTab" data-v="fonti">fonti</a>)` : ""}. Prima di andare <b>controlla sempre date e orari sul sito dell'organizzatore</b>.</div>
         ${up.map(eventCard).join("") || `<div class="empty"><b>📅</b>Nessun evento in arrivo con data certa.</div>`}
         ${tbd.length ? `<div class="section-title"><h2>In arrivo, date da confermare</h2></div>${tbd.map(eventCard).join("")}` : ""}
         <button class="btn ghost block" data-act="ev-add" style="margin-top:8px">➕ Aggiungi un evento che hai trovato</button>`;
     } else if (ui.evTab === "luoghi") {
-      body = `<p class="small muted">Servizi, piscine, passeggiate e luoghi a misura di passeggino vicino a Montecchio Maggiore.</p>${PLACES.map(placeCard).join("")}`;
+      const places = PLACES.filter(withinKm).sort((a, b) => a.km - b.km);
+      body = `${kmChips}<p class="small muted">Servizi, piscine, passeggiate e luoghi a misura di passeggino intorno a Montecchio Maggiore.</p>${places.map(placeCard).join("") || `<div class="empty"><b>📍</b>Nessun luogo in questo raggio.</div>`}`;
     } else {
       body = `<div class="card"><h2>🔎 Dove trovare nuovi eventi</h2>
         <p class="small muted">Questi siti pubblicano spesso iniziative per famiglie. Quando ne trovi una adatta, aggiungila con «➕» nella scheda Prossimi.</p>
@@ -649,6 +664,7 @@
       case "set": ui[t.dataset.k] = t.dataset.v; render(true); break;
       case "set-bool": ui[t.dataset.k] = t.dataset.v === "1"; render(true); break;
       case "toggle": ui[t.dataset.k] = !ui[t.dataset.k]; render(true); break;
+      case "set-km": evKm = Number(t.dataset.v); S.set("evKm", evKm); render(true); break;
       case "fav": {
         e.preventDefault();
         const id = t.dataset.id;
