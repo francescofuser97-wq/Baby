@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Piccoli Passi</title>
+  <meta name="description" content="Svezzamento, ricette, giochi ed eventi per crescere insieme al tuo bambino.">
+  <meta name="theme-color" content="#FFF8F1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1E1A18" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Piccoli Passi">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="btnBack" aria-label="Indietro" hidden>‹</button>
+    <a class="brand" href="#/oggi" id="brand"><img src="icons/icon.svg" alt="" width="28" height="28"><span id="topTitle">Piccoli Passi</span></a>
+    <a class="icon-btn" href="#/impostazioni" aria-label="Impostazioni">⚙️</a>
+  </header>
+
+  <main id="app" tabindex="-1"></main>
+
+  <nav class="tabbar" aria-label="Sezioni">
+    <a href="#/oggi" data-tab="oggi"><span>🏠</span>Oggi</a>
+    <a href="#/ricette" data-tab="ricette"><span>🥣</span>Ricette</a>
+    <a href="#/guida" data-tab="guida"><span>📖</span>Guida</a>
+    <a href="#/giochi" data-tab="giochi"><span>🧸</span>Giochi</a>
+    <a href="#/eventi" data-tab="eventi"><span>📍</span>Eventi</a>
+  </nav>
+
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  <section class="sheet" id="sheet" role="dialog" aria-modal="true" hidden></section>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/data-recipes.js"></script>
+  <script src="js/data-guide.js"></script>
+  <script src="js/data-activities.js"></script>
+  <script src="js/data-events.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

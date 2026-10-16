@@ -1,0 +1,20 @@
+{
+  "name": "Piccoli Passi – Svezzamento, giochi ed eventi",
+  "short_name": "Piccoli Passi",
+  "description": "Ricette per lo svezzamento, giochi per ogni età ed eventi a misura di bebè intorno a Montecchio Maggiore.",
+  "lang": "it",
+  "id": "./",
+  "start_url": "./#/oggi",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF8F1",
+  "theme_color": "#FFF8F1",
+  "categories": ["lifestyle", "health", "food", "education"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
