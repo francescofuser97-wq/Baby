@@ -1,6 +1,6 @@
 /* Service worker: rende l'app disponibile anche offline.
    Quando modifichi l'app, aumenta CACHE per far scaricare la nuova versione. */
-const CACHE = "piccoli-passi-v16";
+const CACHE = "piccoli-passi-v17";
 const ASSETS = [
   "./",
   "./index.html",
