@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "3.2.0";
+  const VERSION = "4.0.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -284,7 +284,7 @@
     return `<div class="welcome">
       <img src="icons/icon.svg" alt="">
       <h1>Benvenuti in Piccoli Passi</h1>
-      <p class="muted">Ricette e consigli per lo svezzamento, giochi per ogni età ed eventi a misura di bebè intorno a Montecchio Maggiore.</p>
+      <p class="muted">Ricette e consigli per lo svezzamento, giochi per ogni età, salute, ed eventi e servizi a misura di bebè vicino a casa tua.</p>
     </div>
     <form class="card" id="welcomeForm">
       <label class="field"><span>Come si chiama il tuo bimbo?</span><input type="text" name="name" autocomplete="off" placeholder="Nome (facoltativo)"></label>
@@ -312,39 +312,57 @@
   function activitiesForAge(m) { return ACTIVITIES.filter(a => a.min <= m && a.max >= m); }
   function tipsForAge(m) { const mm = Math.max(4, m); return TIPS.filter(t => t.min <= mm && t.max >= mm); }
 
-  /* ---------------- Comune e distanze ---------------- */
-  const DEFAULT_HOME = { name: "Montecchio Maggiore", prov: "Vicenza", region: "Veneto", lat: 45.5049, lon: 11.4115 };
-  const homeOf = () => (home && home.lat != null ? home : DEFAULT_HOME);
+  /* ---------------- Comune, zona e distanze ---------------- */
+  // Il comune scelto decide distanze, ricerche, siti e pacchetti di zona. Non c'è un comune predefinito.
+  const homeOf = () => (home && home.lat != null ? home : null);
   function haversine(a, b) {
     const R = 6371, rad = x => x * Math.PI / 180;
     const dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
     const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(h));
   }
-  // Il catalogo di eventi e luoghi è pensato per la zona di Montecchio Maggiore
-  const isLocalArea = () => haversine([homeOf().lat, homeOf().lon], [DEFAULT_HOME.lat, DEFAULT_HOME.lon]) <= 30;
+  // Pacchetti di zona (js/areas/*.js) che coprono il comune scelto
+  function nearPacks() {
+    const h = homeOf();
+    return h ? (window.AREA_PACKS || []).filter(p => haversine([h.lat, h.lon], p.center) <= p.radiusKm) : [];
+  }
+  const isLocalArea = () => nearPacks().length > 0;
+  const packList = k => nearPacks().reduce((all, p) => all.concat(p[k] || []), []);
+  const areaUpdated = () => nearPacks().map(p => p.updated).filter(Boolean).sort()[0] || null;
+  const allTowns = () => Object.assign({}, ...(window.AREA_PACKS || []).map(p => p.towns || {}));
   function coordsOf(x) {
     if (x.lat != null && x.lon != null) return [Number(x.lat), Number(x.lon)];
-    const txt = [x.town, x.addr, x.place].filter(Boolean).join(" ");
-    const t = Object.keys(window.TOWN_COORDS || {}).find(name => txt.includes(name));
-    return t ? TOWN_COORDS[t] : null;
+    const towns = allTowns(), txt = [x.town, x.addr, x.place].filter(Boolean).join(" ");
+    const t = Object.keys(towns).find(name => txt.includes(name));
+    return t ? towns[t] : null;
   }
-  // Distanza indicativa su strada (linea d'aria × 1,2), oppure quella scritta a mano se manca il comune
+  // Distanza indicativa su strada (linea d'aria × 1,2) dal comune scelto
   function distKm(x) {
     const c = coordsOf(x), h = homeOf();
-    if (c) return Math.round(haversine([h.lat, h.lon], c) * 1.2);
-    return x.km != null && x.km !== "" && !home ? Number(x.km) : null;
+    return c && h ? Math.round(haversine([h.lat, h.lon], c) * 1.2) : null;
   }
   const kmLabel = d => (d == null ? "" : d < 3 ? "vicino a te" : "~" + d + " km");
   const withinKm = e => { const d = distKm(e); return evKm === 0 || d == null || d <= evKm; };
+  const homeWhere = () => (homeOf() ? homeOf().name : "me");          // per le ricerche «vicino a …»
+  function homePrompt(text) {
+    return `<button class="card list-card tint-blue" data-act="home-open"><div class="big-emoji">📍</div><div class="grow"><h3>Imposta il tuo comune</h3><div class="meta">${text}</div></div><span class="muted">›</span></button>`;
+  }
   const googleUrl = q => "https://www.google.com/search?q=" + encodeURIComponent(q);
-  const myAsl = () => (window.aslFor ? aslFor(homeOf()) : null) || { name: "la vostra azienda sanitaria (ASL)", certain: false, site: null };
+  function myAsl() {
+    const h = homeOf();
+    if (!h) return null;
+    const a = (window.aslFor ? aslFor(h) : null) || { name: "la vostra azienda sanitaria (ASL)", certain: false, site: null };
+    return Object.assign({}, a, { site: a.site || (a.certain && h.aslSite) || null });
+  }
+  const domainOf = url => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
 
   // Scheda dell'azienda sanitaria del comune scelto, con le ricerche già pronte
   function aslCard() {
-    const a = myAsl(), h = homeOf(), n = a.certain ? a.name : "ASL " + h.name;
+    const a = myAsl(), h = homeOf();
+    if (!a) return homePrompt("Così l'app trova la vostra azienda sanitaria (ASL), il consultorio e i servizi vicini.");
+    const n = a.certain ? a.name : "ASL " + h.name;
     const rows = [
-      ["🌐", "Sito ufficiale", a.site || googleUrl(n + " sito ufficiale")],
+      ["🌐", a.site ? "Sito ufficiale · " + domainOf(a.site) : "Sito ufficiale", a.site || googleUrl(n + " sito ufficiale")],
       ["🤱", "Consultorio familiare", mapsUrl("consultorio familiare vicino a " + h.name)],
       ["💉", "Vaccinazioni pediatriche", googleUrl(n + " vaccinazioni pediatriche " + h.name)],
       ["🌙", "Guardia medica (continuità assistenziale)", googleUrl("guardia medica " + h.name + " numero telefono")],
@@ -357,7 +375,26 @@
       ${rows.map(([e, t, u]) => `<a class="food" href="${u}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}</div>`;
   }
 
+  // Scheda del Comune scelto: sito ufficiale (da Wikidata) e ricerche sul sito
+  function comuneCard() {
+    const h = homeOf();
+    if (!h) return "";
+    const d = domainOf(h.site || ""), on = q => d ? googleUrl("site:" + d + " " + q) : googleUrl("Comune di " + h.name + " " + q);
+    const rows = [
+      ["🏛️", h.site ? "Sito del Comune · " + d : "Sito del Comune", h.site || googleUrl("Comune di " + h.name + " sito ufficiale")],
+      ["🎈", "Eventi e iniziative per famiglie", on("eventi bambini famiglie")],
+      ["📚", "Biblioteca comunale", on("biblioteca")],
+      ["🏫", "Asilo nido e servizi 0-3 anni", on("asilo nido iscrizioni")],
+      ["💶", "Bonus e contributi per le famiglie", on("contributi famiglie bambini bonus")],
+      ["🩺", "Pediatri della zona", googleUrl("pediatri libera scelta " + h.name)]
+    ];
+    return `<div class="card"><div class="card-kicker">🏛️ Il Comune di ${esc(h.name)}</div>
+      ${rows.map(([e, t, u]) => `<a class="food" href="${u}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}
+      ${h.site ? "" : `<p class="small muted" style="margin:8px 0 0">${h.enriched ? "Non ho trovato in automatico il sito del Comune: uso le ricerche." : "Cerco il sito del Comune…"}</p>`}</div>`;
+  }
+
   // Notizie automatiche sugli eventi della zona (tramite il servizio Google della famiglia)
+  const newsServiceUrl = () => (window.PP_CONFIG && PP_CONFIG.serviceUrl) || (raw.get("sync", null) || {}).url || "";
   function feedQueries() {
     const h = homeOf(), m = today0().getMonth();
     const q = ["eventi bambini " + h.name + " when:30d", h.name + " spettacolo per bambini when:30d", h.name + " biblioteca letture bambini when:60d", h.name + " famiglie bambini weekend when:14d"];
@@ -367,13 +404,13 @@
   }
   let feedLoading = false;
   async function loadFeed(force) {
-    const cfg = raw.get("sync", null), h = homeOf();
-    if (!cfg || feedLoading) return;
+    const url = newsServiceUrl(), h = homeOf();
+    if (!url || !h || feedLoading) return;
     const cached = raw.get("feed", null);
     if (!force && cached && cached.place === h.name && Date.now() - cached.at < 6 * 3600e3) return;
     feedLoading = true;
     try {
-      const res = await fetch(cfg.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ key: cfg.key, action: "news", q: feedQueries() }) });
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "news", q: feedQueries() }) });
       const data = await res.json();
       if (!data || !Array.isArray(data.items)) throw new Error((data && data.error) || "risposta non valida");
       const seen = {}, limit = Date.now() - 60 * 864e5;
@@ -392,7 +429,8 @@
   }
   function feedCard() {
     const h = homeOf();
-    if (!raw.get("sync", null)) return `<div class="card tint-blue small"><b>📰 Eventi della tua zona in automatico.</b> Attivando la condivisione con la famiglia (Impostazioni), l'app riceve ogni giorno le notizie su eventi e spettacoli per bambini nella zona di ${esc(h.name)}.</div>`;
+    if (!h) return "";
+    if (!newsServiceUrl()) return `<div class="card tint-blue small"><b>📰 Eventi della tua zona in automatico.</b> Attivando la condivisione con la famiglia (Impostazioni), l'app riceve ogni giorno le notizie su eventi e spettacoli per bambini nella zona di ${esc(h.name)}.</div>`;
     const f = raw.get("feed", null);
     if (!f || f.place !== h.name) { loadFeed(false); return `<div class="card small muted">📰 Cerco gli eventi nella zona di ${esc(h.name)}…</div>`; }
     loadFeed(false);
@@ -407,7 +445,7 @@
 
   function upcomingEvents() {
     const t = today0();
-    const official = EVENTS.filter(e => e.start).map(e => Object.assign({ mine: false }, e));
+    const official = packList("events").filter(e => e.start).map(e => Object.assign({ mine: false }, e));
     const mine = myEvents.map(e => Object.assign({ mine: true, e: "⭐" }, e));
     return official.concat(mine)
       .filter(e => e.start && parseISO(e.end || e.start) >= t && withinKm(e))
@@ -482,6 +520,7 @@
         <a href="#/salute"><span>🩺</span>Salute</a><a href="#/allergeni"><span>⚠️</span>Allergeni</a><a href="#/emergenze"><span>🆘</span>Emergenze</a>
       </div>
 
+      ${homeOf() ? "" : homePrompt("Eventi, servizi, sito del Comune e azienda sanitaria (ASL) della tua zona.")}
       ${healthTodayCard()}
       ${allergenTodayCard()}
       ${readiness}
@@ -820,52 +859,69 @@
 
   function viewEvents() {
     const seg = (v, label) => `<button class="${ui.evTab === v ? "on" : ""}" data-act="set" data-k="evTab" data-v="${v}">${segLabel(label)}</button>`;
+    const tabs = `<div class="segmented">${seg("prossimi", "📅 Prossimi")}${seg("luoghi", "📍 Luoghi")}${seg("fonti", "🔎 Fonti")}</div>`;
+    const h = homeOf();
+    if (!h) {
+      const mine = upcomingEvents();
+      return `${tabs}${homePrompt("Eventi, luoghi, servizi e azienda sanitaria della tua zona, in automatico.")}
+        ${mine.length ? `<div class="section-title"><h2>I tuoi eventi</h2></div>${mine.map(eventCard).join("")}` : ""}
+        <button class="btn ghost block" data-act="ev-add" style="margin-top:8px">➕ Aggiungi un evento</button>`;
+    }
     const kmChips = `<div class="chips">${[[15, "Entro 15 km"], [30, "Entro 30 km"], [50, "Entro 50 km"], [0, "Tutti"]]
       .map(([v, l]) => `<button class="chip ${evKm === v ? "on" : ""}" data-act="set-km" data-v="${v}">${l}</button>`).join("")}</div>`;
-    const staleDays = daysBetween(parseISO(EVENTS_UPDATED), today0());
-    const h = homeOf();
-    const homeLine = `<div class="home-line small">📍 Nella zona di <b>${esc(h.name)}</b> <a href="#/impostazioni" data-act="goto-home">Cambia comune</a></div>`;
-    const month = today0().getMonth();
+    const homeLine = `<div class="home-line small">📍 Nella zona di <b>${esc(h.name)}</b> <button class="link-btn" data-act="home-open">Cambia comune</button></div>`;
+    const month = today0().getMonth(), d = domainOf(h.site || "");
     const searches = [
-      ["🎈", "Eventi per bambini questo weekend", "eventi bambini " + h.name + " questo weekend"],
-      ["📚", "Letture per piccolissimi in biblioteca", "biblioteca " + h.name + " letture bambini 0-3 anni"],
-      ["🎭", "Teatro per famiglie", "teatro per famiglie bambini " + (h.prov || h.name)],
-      month >= 10 || month === 0 ? ["🎄", "Mercatini e Natale", "mercatini di Natale bambini " + h.name] : ["🌳", "Feste e sagre", "feste sagre " + h.name]
-    ];
+      ["🎈", "Eventi per bambini questo weekend", googleUrl("eventi bambini " + h.name + " questo weekend")],
+      d ? ["🏛️", "Eventi sul sito del Comune", googleUrl("site:" + d + " eventi")] : null,
+      ["📚", "Letture per piccolissimi in biblioteca", googleUrl("biblioteca " + h.name + " letture bambini 0-3 anni")],
+      ["🎭", "Teatro per famiglie", googleUrl("teatro per famiglie bambini " + (h.prov || h.name))],
+      month >= 10 || month === 0 ? ["🎄", "Mercatini e Natale", googleUrl("mercatini di Natale bambini " + h.name)] : ["🌳", "Feste e sagre", googleUrl("feste sagre " + h.name)]
+    ].filter(Boolean);
     const searchCard = `<div class="card"><div class="card-kicker">🔎 Cerca nella zona di ${esc(h.name)}</div>
-      ${searches.map(([e, t, q]) => `<a class="food" href="${googleUrl(q)}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}
+      ${searches.map(([e, t, u]) => `<a class="food" href="${u}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}
       <p class="small muted" style="margin:8px 0 0">Quando trovi qualcosa di adatto, aggiungilo con «➕ Aggiungi un evento».</p></div>`;
+    const local = isLocalArea(), updated = areaUpdated();
     let body = "";
     if (ui.evTab === "prossimi") {
       const up = upcomingEvents();
-      const tbd = EVENTS.filter(e => !e.start && withinKm(e));
-      const local = isLocalArea();
-      body = `${homeLine}${kmChips}
-        ${!local ? `${feedCard()}<div class="note small">L'elenco curato di eventi copre la zona di Montecchio Maggiore e dintorni (Vicenza, Verona, Padova, Bassano). Per ${esc(h.name)} trovi sopra le notizie automatiche e qui sotto le ricerche già pronte.</div>${searchCard}` : ""}
-        ${local ? `<div class="note small">📌 Elenco aggiornato al ${fmt(parseISO(EVENTS_UPDATED), { day: "numeric", month: "long", year: "numeric" })}${staleDays > 30 ? ` (<b>più di un mese fa</b>: guarda anche le <a href="#/eventi" data-act="set" data-k="evTab" data-v="fonti">fonti</a>)` : ""}. Prima di andare <b>controlla sempre date e orari sul sito dell'organizzatore</b>.</div>` : ""}
-        ${up.map(eventCard).join("") || `<div class="empty"><b>📅</b>Nessun evento in arrivo con data certa.</div>`}
+      const tbd = packList("events").filter(e => !e.start && withinKm(e));
+      const staleDays = updated ? daysBetween(parseISO(updated), today0()) : 0;
+      body = `${homeLine}
+        ${local ? kmChips : ""}
+        ${feedCard()}
+        ${local ? `<div class="note small">📌 Elenco curato della zona «${esc(nearPacks()[0].name)}», aggiornato al ${fmt(parseISO(updated), { day: "numeric", month: "long", year: "numeric" })}${staleDays > 30 ? ` (<b>più di un mese fa</b>)` : ""}. Prima di andare <b>controlla sempre date e orari sul sito dell'organizzatore</b>.</div>` : ""}
+        ${up.length ? `<div class="section-title"><h2>In calendario</h2></div>${up.map(eventCard).join("")}` : (local ? `<div class="empty"><b>📅</b>Nessun evento in arrivo con data certa.</div>` : "")}
         ${tbd.length ? `<div class="section-title"><h2>In arrivo, date da confermare</h2></div>${tbd.map(eventCard).join("")}` : ""}
-        <button class="btn ghost block" data-act="ev-add" style="margin-top:8px">➕ Aggiungi un evento che hai trovato</button>
-        ${local ? `<div style="margin-top:14px">${feedCard()}${searchCard}</div>` : ""}`;
+        <button class="btn ghost block" data-act="ev-add" style="margin:8px 0 14px">➕ Aggiungi un evento che hai trovato</button>
+        ${searchCard}`;
     } else if (ui.evTab === "luoghi") {
-      const places = PLACES.filter(withinKm).sort((a, b) => (distKm(a) || 0) - (distKm(b) || 0));
+      const places = packList("places").filter(withinKm).sort((a, b) => (distKm(a) || 0) - (distKm(b) || 0));
       const near = [
-        ["📚", "Biblioteca", "biblioteca " + h.name], ["🤱", "Consultorio familiare", "consultorio familiare vicino a " + h.name],
-        ["🏥", "Pronto soccorso pediatrico", "pronto soccorso pediatrico vicino a " + h.name], ["🏊", "Piscina con acquaticità neonatale", "piscina acquaticità neonatale vicino a " + h.name],
-        ["🛝", "Parchi giochi", "parco giochi " + h.name], ["💊", "Farmacia di turno", "farmacia di turno " + h.name]
+        ["🏥", "Pronto soccorso pediatrico", mapsUrl("pronto soccorso pediatrico vicino a " + h.name)],
+        ["🏊", "Piscina con acquaticità neonatale", mapsUrl("piscina acquaticità neonatale vicino a " + h.name)],
+        ["🛝", "Parchi giochi", mapsUrl("parco giochi " + h.name)],
+        ["📚", "Biblioteca", mapsUrl("biblioteca " + h.name)],
+        ["💊", "Farmacia di turno", googleUrl("farmacia di turno " + h.name)]
       ];
       body = `${homeLine}
+        ${comuneCard()}
         ${aslCard()}
         <div class="card"><div class="card-kicker">🗺️ Vicino a te, sulla mappa</div>
-          ${near.map(([e, t, q]) => `<a class="food" href="${q.startsWith("farmacia") ? googleUrl(q) : mapsUrl(q)}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}</div>
-        ${places.length ? `<div class="section-title"><h2>Luoghi consigliati</h2></div>${kmChips}${places.map(placeCard).join("")}` : (isLocalArea() ? `${kmChips}<div class="empty"><b>📍</b>Nessun luogo consigliato in questo raggio.</div>` : "")}`;
+          ${near.map(([e, t, u]) => `<a class="food" href="${u}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}</div>
+        ${places.length ? `<div class="section-title"><h2>Luoghi consigliati</h2></div>${kmChips}${places.map(placeCard).join("")}` : ""}`;
     } else {
-      body = `<div class="card"><h2>🔎 Dove trovare nuovi eventi</h2>
-        <p class="small muted">Questi siti pubblicano spesso iniziative per famiglie. Quando ne trovi una adatta, aggiungila con «➕» nella scheda Prossimi.</p>
-        <ul>${EVENT_SOURCES.map(s => `<li><a href="${esc(s.link)}" target="_blank" rel="noopener">${esc(s.t)}</a></li>`).join("")}</ul></div>
+      const sources = packList("sources");
+      body = `${homeLine}
+        <div class="card"><h2>🔎 Dove trovare nuovi eventi</h2>
+        <p class="small muted">Siti che pubblicano spesso iniziative per famiglie. Quando ne trovi una adatta, aggiungila con «➕» nella scheda Prossimi.</p>
+        <ul>${h.site ? `<li><a href="${esc(h.site)}" target="_blank" rel="noopener">Sito del Comune di ${esc(h.name)}</a></li>` : ""}
+          <li><a href="${googleUrl("eventi bambini " + h.name)}" target="_blank" rel="noopener">Eventi per bambini a ${esc(h.name)} (ricerca)</a></li>
+          <li><a href="https://www.natiperleggere.it/" target="_blank" rel="noopener">Nati per Leggere</a></li>
+          ${sources.map(s => `<li><a href="${esc(s.link)}" target="_blank" rel="noopener">${esc(s.t)}</a></li>`).join("")}</ul></div>
         <div class="card tint-yellow small"><b>Consiglio:</b> chiedi in biblioteca e al consultorio se ci sono gruppi «mamme e bebè», letture per 0-3 anni o incontri sul massaggio neonatale. Spesso non sono pubblicizzati online.</div>`;
     }
-    return `<div class="segmented">${seg("prossimi", "📅 Prossimi")}${seg("luoghi", "📍 Luoghi")}${seg("fonti", "🔎 Fonti")}</div>${body}`;
+    return tabs + body;
   }
 
   function icsFor(ev) {
@@ -1143,7 +1199,7 @@
         <p class="small muted" style="margin:10px 0 0">Età indicative: il calendario preciso lo concordi con il pediatra. Spunta quando l'avete fatto.</p></div>
       <div class="section-title"><h2>💉 Vaccinazioni</h2></div>
       <div class="card">${split(VACCINES.map(v => ({ id: "v:" + v.id, m: v.m, html: item("v:" + v.id, v.t, v.m, v.items.map(esc).join(" · ")) })))}
-        <p class="small muted" style="margin:10px 0 0">Calendario indicativo nazionale. ${myAsl().certain ? "L'" + esc(myAsl().name) : "La vostra azienda sanitaria"} vi manda la lettera di invito con data e ora: quando arriva, aggiungila come appuntamento. Per dubbi chiedi al pediatra o al servizio vaccinazioni.</p></div>`;
+        <p class="small muted" style="margin:10px 0 0">Calendario indicativo nazionale. ${myAsl() && myAsl().certain ? "L'" + esc(myAsl().name) : "La vostra azienda sanitaria"} vi manda la lettera di invito con data e ora: quando arriva, aggiungila come appuntamento. Per dubbi chiedi al pediatra o al servizio vaccinazioni.</p></div>`;
   }
 
   function openAddAppt() {
@@ -1216,14 +1272,14 @@
           <label class="field"><span>Nome del pediatra</span><input type="text" name="pedName" value="${esc(c.pedName || "")}"></label>
           <label class="field"><span>Telefono del pediatra</span><input type="tel" name="pedTel" value="${esc(c.pedTel || "")}"></label>
           <label class="field"><span>Guardia medica (continuità assistenziale)</span><input type="tel" name="gmTel" value="${esc(c.gmTel || "")}">
-            <small class="muted" style="font-weight:400">Il numero dipende dalla zona: <a href="${googleUrl("guardia medica " + homeOf().name + " numero telefono")}" target="_blank" rel="noopener">cercalo per ${esc(homeOf().name)}</a> (${esc(myAsl().name)}) o chiedilo al pediatra.</small></label>
+            <small class="muted" style="font-weight:400">Il numero dipende dalla zona: ${homeOf() ? `<a href="${googleUrl("guardia medica " + homeOf().name + " numero telefono")}" target="_blank" rel="noopener">cercalo per ${esc(homeOf().name)}</a> (${esc(myAsl().name)})` : "imposta il tuo comune per cercarlo"} o chiedilo al pediatra.</small></label>
           <label class="field"><span>Altro contatto (es. nonni)</span><input type="text" name="otherName" value="${esc(c.otherName || "")}" placeholder="Nome"></label>
           <label class="field"><input type="tel" name="otherTel" value="${esc(c.otherTel || "")}" placeholder="Telefono"></label>
           <button class="btn" type="submit">Salva</button>
         </form></details>
       <div class="section-title"><h2>🏥 Pronto soccorso vicini</h2></div>
-      ${HOSPITALS.filter(h => (distKm(h) ?? 0) <= 40).map(h => `<a class="card list-card" href="${mapsUrl(h.q)}" target="_blank" rel="noopener"><div class="big-emoji">🏥</div><div class="grow"><h3>${esc(h.t)}</h3><div class="meta">${kmLabel(distKm(h))} · apri nelle mappe</div></div><span class="muted">›</span></a>`).join("")}
-      <a class="card list-card" href="${mapsUrl("pronto soccorso pediatrico vicino a " + homeOf().name)}" target="_blank" rel="noopener"><div class="big-emoji">🗺️</div><div class="grow"><h3>Il pronto soccorso più vicino</h3><div class="meta">Cerca sulla mappa nella zona di ${esc(homeOf().name)}</div></div><span class="muted">›</span></a>
+      ${packList("hospitals").filter(h => (distKm(h) ?? 0) <= 40).map(h => `<a class="card list-card" href="${mapsUrl(h.q)}" target="_blank" rel="noopener"><div class="big-emoji">🏥</div><div class="grow"><h3>${esc(h.t)}</h3><div class="meta">${kmLabel(distKm(h))} · apri nelle mappe</div></div><span class="muted">›</span></a>`).join("")}
+      <a class="card list-card" href="${mapsUrl("pronto soccorso pediatrico vicino a " + homeWhere())}" target="_blank" rel="noopener"><div class="big-emoji">🗺️</div><div class="grow"><h3>Il pronto soccorso più vicino</h3><div class="meta">${homeOf() ? "Cerca sulla mappa nella zona di " + esc(homeOf().name) : "Cerca sulla mappa vicino a te"}</div></div><span class="muted">›</span></a>
       <div class="section-title"><h2>📖 Cosa fare</h2></div>
       ${videoBlock("emergenze", EMERGENCY_VIDEOS, "disostruzione pediatrica lattante croce rossa")}
       ${EMERGENCY_GUIDE.map((g, i) => `<details class="group" ${i === 0 ? "open" : ""}><summary>${g.e} ${esc(g.t)}</summary><div class="prose" style="padding:0 16px 14px">${g.html}</div></details>`).join("")}
@@ -1431,26 +1487,85 @@
     raw.set("activeKid", activeKid);
     loadKid();
   }
+  /* --- Cifratura end-to-end: il servizio riceve solo dati cifrati e nomi irriconoscibili --- */
+  const bytesToB64u = bytes => {
+    let str = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) str += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  };
+  const b64uToBytes = str => {
+    const bin = atob(str.replace(/-/g, "+").replace(/_/g, "/")), out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  };
+  let codecCache = null;
+  async function getCodec(cfg) {
+    // Spazi creati prima della cifratura (codici PP1-…): dati in chiaro, come prima
+    if (cfg.v !== 2) return { space: cfg.key, keyFor: async n => n, nameFor: k => k, encode: async (n, v) => v, decode: async r => ({ n: r.k, v: r.v }) };
+    if (codecCache && codecCache.secret === cfg.secret) return codecCache.codec;
+    const te = new TextEncoder(), sha = async str => new Uint8Array(await crypto.subtle.digest("SHA-256", te.encode(str)));
+    // Dal codice segreto si ricavano tre chiavi diverse: identificativo dello spazio, cifratura (AES-GCM) e nomi (HMAC)
+    const aes = await crypto.subtle.importKey("raw", await sha("pp-enc|" + cfg.secret), "AES-GCM", false, ["encrypt", "decrypt"]);
+    const mac = await crypto.subtle.importKey("raw", await sha("pp-mac|" + cfg.secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const names = new Map(), keys = new Map();
+    const codec = {
+      space: "s2-" + bytesToB64u(await sha("pp-space|" + cfg.secret)),
+      async keyFor(n) {
+        if (!keys.has(n)) {
+          const k = "h" + bytesToB64u(new Uint8Array(await crypto.subtle.sign("HMAC", mac, te.encode(n)))).slice(0, 27);
+          keys.set(n, k); names.set(k, n);
+        }
+        return keys.get(n);
+      },
+      nameFor: k => names.get(k),
+      async encode(n, v) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, te.encode(JSON.stringify({ n, v }))));
+        const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12);
+        return bytesToB64u(out);
+      },
+      async decode(r) {
+        try {
+          const b = b64uToBytes(r.v);
+          const o = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b.subarray(0, 12) }, aes, b.subarray(12))));
+          keys.set(o.n, r.k); names.set(r.k, o.n);
+          return o;
+        } catch (e) { return null; }
+      }
+    };
+    codecCache = { secret: cfg.secret, codec };
+    return codec;
+  }
+
   async function syncNow(manual) {
     const cfg = raw.get("sync", null);
     if (!cfg || syncing) return false;
     syncing = true; clearTimeout(syncTimer);
     try {
-      const cur = flatten(), meta = cfg.meta || {}, now = Date.now(), changes = [];
-      Object.keys(cur).forEach(k => { if (meta[k] !== hashStr(JSON.stringify(cur[k]))) changes.push({ k, v: cur[k], t: now }); });
-      Object.keys(meta).forEach(k => { if (!(k in cur)) changes.push({ k, v: null, t: now, d: true }); });
-      const res = await fetch(cfg.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ key: cfg.key, since: cfg.seq || 0, changes }) });
+      const codec = await getCodec(cfg);
+      const cur = flatten(), meta = cfg.meta || {}, now = Date.now(), changes = [], startJson = {};
+      Object.keys(cur).forEach(n => { startJson[n] = JSON.stringify(cur[n]); });
+      for (const n of Object.keys(cur)) if (meta[n] !== hashStr(startJson[n])) changes.push({ k: await codec.keyFor(n), v: await codec.encode(n, cur[n]), t: now });
+      for (const n of Object.keys(meta)) if (!(n in cur)) changes.push({ k: await codec.keyFor(n), v: null, t: now, d: true });
+      const res = await fetch(cfg.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ key: codec.space, since: cfg.seq || 0, changes }) });
       const data = await res.json();
       if (!data || data.error || !Array.isArray(data.rec)) throw new Error((data && data.error) || "risposta non valida");
       let changed = false;
-      data.rec.forEach(r => {
-        if (r.d) { if (r.k in cur) { delete cur[r.k]; changed = true; } }
-        else if (JSON.stringify(cur[r.k]) !== JSON.stringify(r.v)) { cur[r.k] = r.v; changed = true; }
-      });
+      for (const r of data.rec) {
+        if (r.d) { const n = codec.nameFor(r.k); if (n && n in cur) { delete cur[n]; changed = true; } continue; }
+        const o = await codec.decode(r);
+        if (o && JSON.stringify(cur[o.n]) !== JSON.stringify(o.v)) { cur[o.n] = o.v; changed = true; }
+      }
+      // Modifiche fatte su questo telefono mentre la sincronizzazione era in corso: si tengono e partono al giro dopo
+      const latest = flatten(), dirty = [];
+      Object.keys(latest).forEach(n => { if (JSON.stringify(latest[n]) !== startJson[n]) { cur[n] = latest[n]; dirty.push(n); } });
+      Object.keys(startJson).forEach(n => { if (!(n in latest)) { delete cur[n]; dirty.push(n); } });
       if (changed) unflatten(cur);
       const newMeta = {};
-      Object.keys(cur).forEach(k => { newMeta[k] = hashStr(JSON.stringify(cur[k])); });
+      Object.keys(cur).forEach(n => { newMeta[n] = hashStr(JSON.stringify(cur[n])); });
+      dirty.forEach(n => { if (n in startJson) newMeta[n] = hashStr(startJson[n]); else delete newMeta[n]; });
       raw.set("sync", Object.assign({}, raw.get("sync", cfg), { seq: data.seq, meta: newMeta, last: Date.now(), err: "" }));
+      if (dirty.length) syncTimer = setTimeout(() => syncNow(false), 1500);
       if (changed || manual || /impostazioni/.test(location.hash)) { if (sheet.hidden) render(true); else pendingRender = true; }
       if (manual) toast(changed ? "Dati aggiornati dalla famiglia ✅" : "Tutto sincronizzato ✅");
       return true;
@@ -1463,32 +1578,54 @@
   }
   const b64u = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const unb64u = str => decodeURIComponent(escape(atob(str.replace(/-/g, "+").replace(/_/g, "/"))));
-  function inviteCode() { const c = raw.get("sync", null); return c ? "PP1-" + b64u(JSON.stringify({ u: c.url, k: c.key })) : ""; }
-  function parseInvite(text) {
-    const m = String(text || "").match(/PP1-[A-Za-z0-9_-]+/);
-    if (!m) return null;
-    try { const o = JSON.parse(unb64u(m[0].slice(4))); return o && /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(o.u) && String(o.k || "").length >= 20 ? o : null; } catch (e) { return null; }
+  const centralUrl = () => (window.PP_CONFIG && PP_CONFIG.serviceUrl) || "";
+  function inviteCode(c) {
+    c = c || raw.get("sync", null);
+    if (!c) return "";
+    return c.v === 2 ? "PP2-" + b64u(JSON.stringify({ u: c.url, s: c.secret })) : "PP1-" + b64u(JSON.stringify({ u: c.url, k: c.key }));
   }
-  function randomKey() { const a = new Uint8Array(24); crypto.getRandomValues(a); return btoa(String.fromCharCode.apply(null, a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+  function parseInvite(text) {
+    const m = String(text || "").match(/PP([12])-[A-Za-z0-9_-]+/);
+    if (!m) return null;
+    try {
+      const o = JSON.parse(unb64u(m[0].slice(4)));
+      if (!o || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(o.u)) return null;
+      if (m[1] === "2") return String(o.s || "").length >= 20 ? { v: 2, url: o.u, secret: o.s } : null;
+      return String(o.k || "").length >= 20 ? { url: o.u, key: o.k } : null;
+    } catch (e) { return null; }
+  }
+  function randomKey() { const a = new Uint8Array(24); crypto.getRandomValues(a); return bytesToB64u(a); }
+  // Crea un nuovo spazio cifrato sul servizio indicato e carica i dati di questo telefono
+  async function startSpace(url) {
+    raw.set("sync", { v: 2, url, secret: randomKey(), seq: 0, meta: {}, last: 0, err: "" });
+    const ok = await syncNow(false);
+    if (!ok) raw.del("sync");
+    return ok;
+  }
 
   function syncCard() {
-    const c = raw.get("sync", null);
+    const c = raw.get("sync", null), central = centralUrl();
     if (!c) return `<div class="card tint-blue">
         <h2>👨‍👩‍👧 Condividi con la famiglia</h2>
-        <p class="small">Tu e chi inviti (per esempio la mamma, il papà o i nonni) vedete e modificate gli stessi dati: figli, diario, crescita, agenda, preferiti. I dati si salvano in un file sul <b>tuo Google Drive</b>.</p>
-        <div class="btn-row"><button class="btn" data-act="sync-setup">Attiva la condivisione</button><button class="btn ghost" data-act="sync-join">Ho un codice di invito</button></div>
+        <p class="small">Tu e chi inviti (il partner, i nonni, la babysitter) vedete e modificate gli stessi dati: figli, diario, crescita, agenda, preferiti. I dati vengono <b>cifrati sul telefono</b> prima di partire: chi gestisce il servizio non può leggerli.</p>
+        <div class="btn-row">${central ? `<button class="btn" data-act="sync-start">Attiva la condivisione</button>` : `<button class="btn" data-act="sync-setup">Attiva la condivisione</button>`}
+          <button class="btn ghost" data-act="sync-join">Ho un codice di invito</button></div>
+        ${central ? `<button class="link-btn small" data-act="sync-setup" style="margin-top:10px">Preferisci usare un tuo servizio Google?</button>` : ""}
       </div>`;
     const when = c.last ? new Date(c.last).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "mai";
+    const own = c.url !== central;
     return `<div class="card tint-green">
         <h2>👨‍👩‍👧 Condivisione attiva</h2>
         <p class="small">${c.err ? `⚠️ Ultimo tentativo non riuscito (${esc(c.err)}). Riproverò da solo.` : "✅ Tutto collegato."} Ultima sincronizzazione: <b>${esc(when)}</b>.</p>
+        <p class="small">${c.v === 2 ? "🔒 Dati cifrati sul telefono: " + (own ? "il vostro servizio Google" : "il servizio dell'app") + " conserva solo dati illeggibili." : "⚠️ Questo spazio è stato creato prima della cifratura: i dati sono leggibili nel Drive di chi ha creato il servizio."}</p>
         <div class="btn-row">
           <button class="btn" data-act="sync-invite">📨 Invita qualcuno</button>
           <button class="btn ghost" data-act="sync-now">🔄 Sincronizza ora</button>
         </div>
+        ${c.v !== 2 ? `<button class="btn block" data-act="sync-encrypt" style="margin-top:10px">🔒 Passa alla cifratura</button>` : ""}
         <button class="btn ghost block" data-act="sync-newfamily" style="margin-top:10px">🏠 Crea uno spazio per un'altra famiglia</button>
-        <button class="btn ghost block" data-act="sync-update" style="margin-top:8px">🛠️ Aggiorna il servizio Google</button>
-        <p class="small muted" style="margin:10px 0 0">Le foto dei piatti restano solo sul telefono che le ha scattate. Il codice di invito dà accesso a tutti i dati: mandalo solo a persone di fiducia.</p>
+        ${own ? `<button class="btn ghost block" data-act="sync-update" style="margin-top:8px">🛠️ Aggiorna il servizio Google</button>` : ""}
+        <p class="small muted" style="margin:10px 0 0">Le foto dei piatti restano solo sul telefono che le ha scattate. Il codice di invito apre tutti i dati della famiglia: mandalo solo a persone di fiducia.</p>
         <button class="btn danger small" data-act="sync-leave" style="margin-top:8px">Scollega questo telefono</button>
       </div>`;
   }
@@ -1545,7 +1682,7 @@
   function openNewFamily() {
     const c = raw.get("sync", null);
     if (!c) return;
-    const code = "PP1-" + b64u(JSON.stringify({ u: c.url, k: randomKey() }));
+    const code = inviteCode({ v: 2, url: c.url, secret: randomKey() });
     const link = location.origin + location.pathname;
     const text = "Ti ho preparato Piccoli Passi 🌱, un'app per seguire svezzamento, crescita e giochi del tuo bimbo.\n\n1) Apri l'app: " + link +
       "\n2) Su iPhone aggiungila alla schermata Home e aprila da lì\n3) Tocca «Ho un codice di invito» e incolla questo codice:\n\n" + code +
@@ -1574,39 +1711,96 @@
     try { Object.keys(localStorage).filter(k => /^pp\.(k\.|kids$|favs$|myEvents$|videos$|contacts$|home$)/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
     applyingRemote = false;
     kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; home = null; activeKid = null; raw.set("activeKid", null); loadKid();
-    raw.set("sync", { url: inv.u, key: inv.k, seq: 0, meta: {}, last: 0, err: "" });
+    raw.set("sync", Object.assign({}, inv, { seq: 0, meta: {}, last: 0, err: "" }));
     closeSheet(); toast("Collegamento in corso…");
     const ok = await syncNow(false);
     location.hash = "#/oggi"; render(false);
     toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato! Ora inserisci il tuo bimbo per iniziare 🌱") : "Non riesco a collegarmi: controlla la connessione e riprova da Impostazioni");
   }
 
-  /* ---------------- Scelta del comune (OpenStreetMap) ---------------- */
+  /* ---------------- Scelta del comune (OpenStreetMap + Wikidata) ---------------- */
   let homeResults = [];
   const placeName = a => a && (a.city || a.town || a.village || a.municipality || a.hamlet);
+  const provOf = a => ((a && (a.county || a.state_district || a.province)) || "").replace(/^Provincia di /, "");
   async function searchComune(q) {
-    const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=it&addressdetails=1&limit=10&accept-language=it&q=" + encodeURIComponent(q));
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=it&addressdetails=1&extratags=1&limit=10&accept-language=it&q=" + encodeURIComponent(q));
     const list = await r.json();
     const seen = {};
-    return list.map(x => ({ name: placeName(x.address) || x.name, prov: (x.address && (x.address.county || x.address.state_district || x.address.province)) || "", region: (x.address && x.address.state) || "", lat: Number(x.lat), lon: Number(x.lon) }))
+    return list.map(x => ({ name: placeName(x.address) || x.name, prov: provOf(x.address), region: (x.address && x.address.state) || "",
+      lat: Number(x.lat), lon: Number(x.lon), wd: (x.extratags && x.extratags.wikidata) || "" }))
       .filter(x => x.name && !seen[x.name + x.prov] && (seen[x.name + x.prov] = true));
   }
   function setHome(h) {
-    home = { name: h.name, prov: (h.prov || "").replace(/^Provincia di /, ""), region: h.region || "", lat: Number(h.lat.toFixed(4)), lon: Number(h.lon.toFixed(4)) };
+    home = { name: h.name, prov: h.prov || "", region: h.region || "", lat: Number(Number(h.lat).toFixed(4)), lon: Number(Number(h.lon).toFixed(4)), wd: h.wd || "" };
+    raw.del("feed");
     S.set("home", home); closeSheet(); toast("Comune impostato: " + home.name + " 📍"); render(true);
+    enrichHome(true);
+  }
+  // Wikidata: sito ufficiale (P856) e codice ISTAT (P635) del Comune; sito dell'azienda sanitaria
+  const WD_API = "https://www.wikidata.org/w/api.php?format=json&origin=*&";
+  async function wdClaims(qid) {
+    const j = await (await fetch(WD_API + "action=wbgetentities&props=claims&ids=" + encodeURIComponent(qid))).json();
+    return (j.entities && j.entities[qid] && j.entities[qid].claims) || {};
+  }
+  const wdValue = (claims, p) => {
+    const list = (claims[p] || []).filter(c => c.mainsnak && c.mainsnak.datavalue);
+    const best = list.find(c => c.rank === "preferred") || list.find(c => c.rank !== "deprecated");
+    return best ? best.mainsnak.datavalue.value : null;
+  };
+  async function findAslSite(aslName) {
+    const j = await (await fetch(WD_API + "action=wbsearchentities&language=it&uselang=it&type=item&limit=5&search=" + encodeURIComponent(aslName))).json();
+    for (const it of (j.search || [])) {
+      if (!/sanitari|salute|ULSS|ASL|ATS|ASP|AUSL|USL/i.test((it.description || "") + " " + (it.label || ""))) continue;
+      const site = wdValue(await wdClaims(it.id), "P856");
+      if (site) return site;
+    }
+    return null;
+  }
+  let enriching = false;
+  async function enrichHome(force) {
+    const h = homeOf();
+    if (!h || enriching || (!force && h.enriched && Date.now() - h.enriched < 30 * 864e5)) return;
+    enriching = true;
+    try {
+      let qid = h.wd;
+      if (!qid) {
+        const found = (await searchComune(h.name + (h.prov ? ", " + h.prov : ""))).find(x => x.name === h.name);
+        qid = found ? found.wd : "";
+      }
+      const upd = { enriched: Date.now(), wd: qid || "" };
+      if (qid) {
+        const cl = await wdClaims(qid);
+        upd.site = wdValue(cl, "P856") || "";
+        upd.istat = wdValue(cl, "P635") || "";
+      }
+      const a = window.aslFor ? aslFor(h) : null;
+      if (a && a.certain && !a.site) upd.aslSite = await findAslSite(a.name) || "";
+      if (homeOf() && homeOf().name === h.name) { home = Object.assign({}, home, upd); S.set("home", home); if (sheet.hidden) render(true); }
+    } catch (e) { /* senza connessione si riprova la prossima volta */ }
+    finally { enriching = false; }
+  }
+  function openHomePicker() {
+    const h = homeOf();
+    openSheet(`<h2>📍 Il tuo comune</h2>
+      <p class="small">Serve per eventi e luoghi vicini, per trovare il sito del Comune e la vostra azienda sanitaria (ASL), e per il pronto soccorso più vicino.${h ? ` Ora: <b>${esc(h.name)}</b>.` : ""}</p>
+      <form id="homeForm" class="row"><input type="search" name="q" class="grow" placeholder="Scrivi il nome del comune" required autofocus><button class="btn" type="submit">Cerca</button></form>
+      <div id="homeResults"></div>
+      <div class="btn-row"><button class="btn ghost" data-act="home-gps">📍 Usa la mia posizione</button><button class="btn ghost" data-act="close">Chiudi</button></div>
+      <p class="small muted">Il nome viene cercato su OpenStreetMap e il sito del Comune su Wikidata, due servizi pubblici e gratuiti.</p>`);
   }
   function useMyPosition() {
     if (!navigator.geolocation) { toast("Questo telefono non permette di leggere la posizione"); return; }
     toast("Cerco la tua posizione…");
     navigator.geolocation.getCurrentPosition(async pos => {
       const lat = pos.coords.latitude, lon = pos.coords.longitude;
-      let name = "La tua zona", prov = "", region = "";
+      let name = "La tua zona", prov = "", region = "", wd = "";
       try {
-        const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language=it&lat=" + lat + "&lon=" + lon);
+        const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&extratags=1&accept-language=it&lat=" + lat + "&lon=" + lon);
         const j = await r.json();
-        name = placeName(j.address) || name; prov = (j.address && (j.address.county || j.address.state_district || j.address.province)) || ""; region = (j.address && j.address.state) || "";
+        name = placeName(j.address) || name; prov = provOf(j.address); region = (j.address && j.address.state) || "";
+        wd = (j.extratags && j.extratags.wikidata) || "";
       } catch (e) { /* senza connessione resta «La tua zona» */ }
-      setHome({ name, prov, region, lat, lon });
+      setHome({ name, prov, region, lat, lon, wd });
     }, () => toast("Non ho il permesso di leggere la posizione: cerca il comune per nome"), { timeout: 15000, maximumAge: 600000 });
   }
 
@@ -1628,9 +1822,10 @@
       </div>
       <div class="card">
         <h2>📍 Il tuo comune</h2>
-        <p class="small">Serve per le distanze di eventi e luoghi, per le ricerche «vicino a te» e per il pronto soccorso più vicino. Ora: <b>${esc(homeOf().name)}</b>${home ? "" : " (predefinito)"}.</p>
-        <form id="homeForm" class="row"><input type="search" name="q" class="grow" placeholder="Cerca il comune…" required><button class="btn" type="submit">Cerca</button></form>
-        <div class="btn-row"><button class="btn ghost small" data-act="home-gps">📍 Usa la mia posizione</button>${home ? `<button class="btn ghost small" data-act="home-reset">↩️ Torna a Montecchio Maggiore</button>` : ""}</div>
+        ${homeOf() ? `<p class="small" style="margin-bottom:4px"><b>${esc(homeOf().name)}</b>${homeOf().prov ? " (" + esc(homeOf().prov) + ")" : ""}</p>
+          <p class="small muted">${myAsl() ? "Azienda sanitaria: " + esc(myAsl().name) + (myAsl().certain ? "" : " (da verificare)") : ""}${homeOf().site ? " · Sito del Comune: " + esc(domainOf(homeOf().site)) : ""}</p>`
+          : `<p class="small">Non ancora impostato. Serve per eventi e luoghi vicini, il sito del Comune, l'azienda sanitaria e il pronto soccorso più vicino.</p>`}
+        <div class="btn-row"><button class="btn" data-act="home-open">${homeOf() ? "Cambia comune" : "Imposta il comune"}</button></div>
       </div>
       <div class="card">
         <h2>🎨 Aspetto</h2>
@@ -1648,6 +1843,16 @@
           <button class="btn ghost" data-act="export">⬇️ Esporta</button>
           <label class="btn ghost" style="cursor:pointer">⬆️ Importa<input type="file" accept="application/json,.json" data-act="import" hidden></label>
         </div>
+      </div>
+      <div class="card">
+        <h2>🔐 Dove sono i tuoi dati</h2>
+        <ul class="small">
+          <li><b>Sul telefono:</b> profili, diario, crescita, agenda, preferiti e foto restano in questa app.</li>
+          <li><b>Condivisione (se attiva):</b> i dati partono già <b>cifrati</b> con il codice di famiglia; il servizio li conserva senza poterli leggere. Le foto non vengono mai inviate.</li>
+          <li><b>Comune:</b> il nome viene cercato su OpenStreetMap e il sito del Comune o dell'ASL su Wikidata. Non viene inviato nient'altro.</li>
+          <li><b>Notizie sugli eventi:</b> al servizio arriva solo il nome del comune.</li>
+          <li><b>Video:</b> YouTube riceve la richiesta solo quando premi play.</li>
+        </ul>
       </div>
       <div class="card">
         <h2>ℹ️ Informazioni</h2>
@@ -1681,8 +1886,21 @@
         break;
       case "play": openVideo(t.dataset.id, t.dataset.t); break;
       case "sync-setup": openSyncSetup(); break;
+      case "sync-start":
+        toast("Attivo la condivisione…");
+        if (await startSpace(centralUrl())) { toast("Condivisione attiva ✅ Ora puoi invitare qualcuno"); render(true); openInvite(); }
+        else toast("Non riesco a collegarmi al servizio: riprova più tardi");
+        break;
+      case "sync-encrypt": {
+        const old = raw.get("sync", null);
+        if (!old || !confirm("Creo un nuovo spazio cifrato con tutti i dati di questo telefono. Dopo dovrai mandare il nuovo invito agli altri membri della famiglia. Procedo?")) break;
+        toast("Creo lo spazio cifrato…");
+        if (await startSpace(old.url)) { toast("Fatto 🔒 Ora manda il nuovo invito alla famiglia"); render(true); openInvite(); }
+        else { raw.set("sync", old); toast("Non riesco a collegarmi: riprova più tardi"); }
+        break;
+      }
       case "home-gps": useMyPosition(); break;
-      case "home-reset": home = null; raw.del("home"); onLocalChange("home"); toast("Comune: Montecchio Maggiore"); render(true); break;
+      case "home-open": openHomePicker(); break;
       case "home-pick": { const hh = homeResults[Number(t.dataset.i)]; if (hh) setHome(hh); break; }
       case "sync-join": openSyncJoin(""); break;
       case "sync-now": syncNow(true); break;
@@ -1757,7 +1975,7 @@
         break;
       case "dismiss-install": S.set("installDismissed", true); render(true); break;
       case "ics": {
-        const ev = upcomingEvents().find(x => x.id === t.dataset.id) || EVENTS.find(x => x.id === t.dataset.id);
+        const ev = upcomingEvents().find(x => x.id === t.dataset.id) || packList("events").find(x => x.id === t.dataset.id);
         if (ev) download(ev.id + ".ics", icsFor(ev), "text/calendar;charset=utf-8");
         break;
       }
@@ -1854,19 +2072,19 @@
       toast("Cerco…");
       searchComune(q).then(list => {
         homeResults = list;
-        if (!list.length) { toast("Nessun comune trovato con questo nome"); return; }
-        openSheet(`<h2>📍 Scegli il comune</h2><div class="card" style="padding:0;overflow:hidden">
-          ${list.map((x, i) => `<button class="food" data-act="home-pick" data-i="${i}"><span class="st">📍</span><span class="grow"><b>${esc(x.name)}</b><br><span class="small muted">${esc([x.prov, x.region].filter(Boolean).join(" · "))}</span></span><span class="muted">›</span></button>`).join("")}
-        </div><button class="btn ghost block" data-act="close" style="margin-top:8px">Annulla</button>`);
+        const box = sheet.querySelector("#homeResults");
+        if (!box) return;
+        box.innerHTML = list.length ? `<div class="card" style="padding:0;overflow:hidden;margin-top:10px">
+          ${list.map((x, i) => `<button class="food" data-act="home-pick" data-i="${i}"><span class="st">📍</span><span class="grow"><b>${esc(x.name)}</b><br><span class="small muted">${esc([x.prov, x.region].filter(Boolean).join(" · "))}</span></span><span class="muted">›</span></button>`).join("")}</div>`
+          : `<p class="small" style="margin-top:10px">Nessun comune trovato con questo nome.</p>`;
       }).catch(() => toast("Serve la connessione a internet per cercare il comune"));
     } else if (f.id === "syncSetupForm") {
       const url = String(fd.get("url") || "").trim();
       if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec/.test(url)) { toast("L'indirizzo deve iniziare con https://script.google.com e finire con /exec"); return; }
-      raw.set("sync", { url, key: randomKey(), seq: 0, meta: {}, last: 0, err: "" });
       toast("Collegamento in corso…");
-      syncNow(false).then(ok => {
+      startSpace(url).then(ok => {
         if (ok) { closeSheet(); toast("Condivisione attiva ✅ Ora puoi invitare qualcuno"); render(true); openInvite(); }
-        else { raw.del("sync"); toast("Non riesco a collegarmi: controlla l'URL e che l'accesso sia «Chiunque»"); }
+        else toast("Non riesco a collegarmi: controlla l'URL e che l'accesso sia «Chiunque»");
       });
     } else if (f.id === "syncJoinForm") {
       joinFamily(fd.get("code"));
@@ -1932,6 +2150,7 @@
   if (!location.hash) history.replaceState(null, "", "#/oggi");
   handleInviteLink();
   render(false);
+  enrichHome(false);
   if (raw.get("sync", null)) {
     syncNow(false);
     setInterval(() => { if (document.visibilityState === "visible") syncNow(false); }, 60000);

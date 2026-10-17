@@ -1,73 +1,77 @@
 # Piccoli Passi 🌱
 
-Web app installabile (PWA) per accompagnare lo svezzamento e la crescita del bambino:
+Web app installabile (PWA) per famiglie con bambini da 0 a 3 anni, utilizzabile in tutta Italia:
 
-- **Oggi**: età del bimbo, fase dello svezzamento, checklist «è pronto?», consiglio, ricetta e gioco del giorno, prossimi eventi.
-- **Ricette**: 32 ricette con approccio misto (versione **pappa** 🥄 e versione **a pezzi** ✋), filtri per età, tipo, stagione e preferiti.
-- **Guida**: quando iniziare, approccio misto, pezzi sicuri, conato o soffocamento, cosa evitare, allergeni, ferro, acqua, organizzazione, esempio di prime 4 settimane.
-- **Diario dei cibi** e **percorso allergeni**: cibi provati, reazioni, prossimo allergene da introdurre e quelli da riproporre.
-- **Giochi**: attività per età e area di sviluppo, tappe dello sviluppo, consigli educativi, libri e filastrocche.
-- **Salute**: agenda con appuntamenti e promemoria, bilanci di salute, vaccinazioni, curve di crescita OMS, domande per il pediatra.
-- **Emergenze** (🆘 in alto): numeri utili, pronto soccorso vicini, disostruzione, febbre, ingestioni, ustioni.
-- **Eventi**: eventi e luoghi a misura di bebè intorno a Montecchio Maggiore, con mappa, aggiunta al calendario ed eventi personali.
+- **Oggi**: età del bimbo, fase dello svezzamento, il mese di vita, consiglio, ricetta e gioco del giorno, prossimi appuntamenti ed eventi.
+- **Ricette**: 32 ricette con approccio misto (versione **pappa** 🥄 e **a pezzi** ✋), con illustrazione e la possibilità di aggiungere la propria foto.
+- **Guida**: svezzamento passo passo, pezzi sicuri, conato o soffocamento, allergeni, diario dei cibi e percorso allergeni.
+- **Salute**: agenda, bilanci di salute, vaccinazioni, curve di crescita OMS, domande per il pediatra, guide «Come si fa», azienda sanitaria della propria zona.
+- **Giochi**: attività per età, tappe dello sviluppo, mese per mese, consigli, libri e filastrocche.
+- **Eventi**: notizie automatiche sugli eventi per bambini del proprio comune, elenchi curati per alcune zone, luoghi e servizi vicini.
+- **Emergenze** (🆘): numeri utili, pronto soccorso più vicino, disostruzione, febbre, ingestioni, ustioni.
+- **Più figli** con profili separati, **condivisione cifrata** con chi si vuole (partner, nonni), tema chiaro/scuro.
 
-**Il tuo comune** (Impostazioni): le distanze di eventi e luoghi, le ricerche «vicino a te» (biblioteca, consultorio, pronto soccorso pediatrico, piscina, parchi, farmacia di turno) e il pronto soccorso più vicino si calcolano dal comune scelto, cercandolo per nome o con la posizione del telefono (OpenStreetMap). In base al comune l'app riconosce anche l'**azienda sanitaria** (ASL, ULSS, ATS, ASP… in `js/data-asl.js`) e propone sito, consultorio, vaccinazioni, guardia medica e CUP. Gli **eventi** arrivano da due fonti: l'elenco curato per la zona di Montecchio Maggiore (aggiornato ogni settimana) e, per qualsiasi comune, le notizie di Google News su eventi per bambini lette dal servizio Google della famiglia (serve la condivisione attiva).
+## Come funziona per ogni comune
 
-**Più figli**: ogni figlio ha il suo profilo (selettore in alto con il nome). Diario, allergeni, crescita, agenda, giochi fatti e domande sono separati; preferiti, eventi, numeri di emergenza e tema sono in comune. L'agenda ha anche la vista «Tutta la famiglia».
+Ogni famiglia sceglie il proprio comune (Impostazioni o «Imposta il tuo comune»): non c'è un comune predefinito. Da lì l'app costruisce tutto in automatico:
 
-Funziona offline. Nel codice non c'è nessun dato personale: nomi, date di nascita e diario restano sul telefono, oppure nel **tuo** Google Drive se attivi la condivisione.
+| Cosa | Da dove arriva |
+|---|---|
+| Nome, provincia, coordinate del comune | OpenStreetMap (Nominatim), cercando per nome o dalla posizione del telefono |
+| Sito ufficiale del Comune, codice ISTAT | Wikidata |
+| Azienda sanitaria (ASL, ULSS, ATS, ASP…) | tabella `js/data-asl.js` (provincia, e comune per comune dove una provincia ne ha più di una) |
+| Sito dell'azienda sanitaria | ULSS del Veneto: indirizzo noto; altre: Wikidata, altrimenti una ricerca |
+| Notizie su eventi per bambini | Google News, letto dal servizio (vedi sotto), con il solo nome del comune |
+| Ricerche e mappe (consultorio, pronto soccorso, biblioteca, asilo nido, bonus, farmacia di turno…) | costruite con il nome del comune e il sito del Comune |
+| Eventi, luoghi e ospedali curati | **pacchetti di zona** in `js/areas/`, mostrati solo a chi abita entro il raggio della zona |
 
-## Condividere con la famiglia
+### Pacchetti di zona
 
-In **Impostazioni → Condividi con la famiglia** l'app guida passo passo. In breve:
+`js/areas/ovest-vicentino.js` contiene eventi, luoghi, ospedali e fonti curati per Montecchio Maggiore e dintorni (aggiornati ogni settimana in automatico). Per un'altra zona si crea un file simile (`center`, `radiusKm`, `updated`, `events`, `places`, `hospitals`, `sources`, `towns`) e lo si aggiunge a `index.html` e `sw.js`.
 
-1. Una volta sola, su [script.google.com](https://script.google.com) crei un nuovo progetto e incolli il codice di `sync/piccoli-passi-sync.gs` (l'app ha il pulsante «Copia il codice»).
-2. **Esegui il deployment → Nuovo deployment → App web**, con «Esegui come: Me» e «Chi ha accesso: Chiunque». Autorizzi l'accesso al Drive e copi l'URL che finisce con `/exec`.
-3. Incolli l'URL nell'app e premi **Collega**. Poi **Invita qualcuno**: il messaggio contiene un codice `PP1-…` (o un link diretto).
-4. Chi riceve l'invito apre l'app, tocca **Ho un codice di invito** e lo incolla.
+## Il servizio (condivisione e notizie)
 
-Chi ha creato il servizio prima di ottobre 2026 deve aggiornarlo una volta (Impostazioni → Aggiorna il servizio Google: incolla il nuovo codice e pubblica una «Nuova versione»), per ricevere le notizie sugli eventi.
+Il codice del servizio è in `sync/piccoli-passi-sync.gs` (Google Apps Script). Si può usare in due modi:
 
-I dati condivisi stanno in un file `piccoli-passi-….json` nel Drive di chi ha pubblicato lo script. Ogni telefono manda e riceve solo i dati cambiati; se due persone modificano lo stesso elemento vince la modifica più recente. Il codice di invito dà accesso ai dati: mandalo solo a persone di fiducia. Le foto dei piatti non vengono condivise.
+1. **Servizio centrale (consigliato per distribuire l'app)**: chi gestisce l'app lo pubblica **una volta** e mette l'indirizzo in `js/config.js` (`serviceUrl`). Da quel momento ogni famiglia attiva la condivisione con un tocco e tutti ricevono le notizie sugli eventi del proprio comune, senza configurare niente.
+2. **Servizio di famiglia**: se `serviceUrl` è vuoto, o se una famiglia preferisce, in Impostazioni → Condividi si può collegare un servizio Google proprio. L'app spiega i passaggi.
 
-**Altre famiglie** (per esempio una cognata con la sua bimba): possono semplicemente installare l'app e usarla da sole, oppure attivare la condivisione con il loro account Google. In alternativa, da **Impostazioni → Crea uno spazio per un'altra famiglia** generi un codice per uno spazio nuovo e separato sul tuo servizio: loro non vedono i tuoi dati e tu non vedi i loro nell'app (il file però si trova nel tuo Drive).
+Pubblicazione: su [script.google.com](https://script.google.com) nuovo progetto → incolla il codice → **Esegui il deployment → Nuovo deployment → App web**, «Esegui come: Me», «Chi ha accesso: Chiunque» → autorizza Drive e richieste esterne → copia l'URL che finisce con `/exec`. Per aggiornarlo: **Gestisci deployment → ✏️ → Nuova versione** (l'URL non cambia).
 
-Resta anche il backup manuale: «Esporta/Importa» in Impostazioni salva tutti i figli in un file.
+### Privacy e cifratura
 
-## Pubblicarla con GitHub Pages
+- Ogni famiglia ha uno spazio identificato da un codice segreto (inviti `PP2-…`). Il telefono ricava dal codice tre chiavi: l'identificativo dello spazio, una chiave **AES-GCM** per cifrare i dati e una chiave **HMAC** per rendere irriconoscibili i nomi dei dati.
+- Al servizio arrivano solo identificativo e dati cifrati: chi lo gestisce (e Google) non può leggere nomi, date, diario o misure, né sapere di quale comune si tratta.
+- Per le notizie il servizio riceve solo il nome del comune.
+- Le foto dei piatti non lasciano mai il telefono.
+- Gli spazi creati con la versione precedente (codici `PP1-…`, dati in chiaro) continuano a funzionare e si possono convertire con **Passa alla cifratura**.
+- Il codice di invito dà accesso ai dati della famiglia: va mandato solo a persone di fiducia.
 
-GitHub Pages gratuito funziona solo con repository **pubblici**. Il codice non contiene dati personali.
+## Pubblicare l'app
 
-1. Su GitHub apri il repository → **Settings** → **General** → in fondo, **Change visibility** → **Make public**.
-2. **Settings** → **Pages** → in «Build and deployment» scegli **Deploy from a branch**, poi il branch con l'app e la cartella **/ (root)** → **Save**.
-3. Dopo 1-2 minuti l'app è online su `https://francescofuser97-wq.github.io/Baby/`.
+L'app è statica: basta GitHub Pages (repository pubblico: il codice non contiene dati personali) oppure Netlify o Cloudflare Pages. Su GitHub: **Settings → Pages → Deploy from a branch**, scegli il branch e la cartella **/ (root)**.
 
-Se preferisci tenere il repository privato, puoi collegarlo gratis a Netlify o Cloudflare Pages: la cartella da pubblicare è la radice, e non serve nessun comando di build.
+Installazione sul telefono:
+- **Android (Chrome)**: menu **⋮** → **Installa app**.
+- **iPhone (Safari o Chrome)**: **Condividi** ⬆️ → **Aggiungi alla schermata Home**.
 
-## Installarla sul telefono
-
-- **Android (Chrome)**: apri il link → menu **⋮** → **Installa app** (o «Aggiungi a schermata Home»).
-- **iPhone (Safari o Chrome)**: apri il link → pulsante **Condividi** ⬆️ (in Safari in basso, in Chrome in alto a destra) → **Aggiungi alla schermata Home**.
-
-## Aggiornare i contenuti
-
-I contenuti sono in file JavaScript semplici da modificare:
+## File principali
 
 | File | Contenuto |
 |---|---|
-| `js/data-recipes.js` | ricette |
-| `js/data-guide.js` | guida, cibi del diario, consigli, tappe dello sviluppo |
+| `js/config.js` | indirizzo del servizio centrale |
+| `js/app.js` | l'app |
+| `js/data-recipes.js`, `js/dish-art.js` | ricette e loro illustrazioni |
+| `js/data-guide.js` | guida, cibi del diario, consigli, tappe |
 | `js/data-activities.js` | giochi e attività |
-| `js/data-events.js` | eventi, luoghi e fonti (ricordati di aggiornare `EVENTS_UPDATED`) |
-| `js/data-health.js` | percorso allergeni, bilanci, vaccinazioni, emergenze, libri e filastrocche |
-| `js/data-growth.js` | standard di crescita OMS 0-24 mesi (non modificare) |
+| `js/data-health.js` | allergeni, bilanci, vaccinazioni, emergenze, guide di cura, libri, filastrocche |
 | `js/data-months.js` | guida mese per mese |
-| `js/dish-art.js` | illustrazioni delle ricette |
-| `sync/piccoli-passi-sync.gs` | servizio di condivisione (Google Apps Script); `js/sync-script.js` ne contiene una copia per il pulsante «Copia il codice» |
+| `js/data-asl.js` | azienda sanitaria per provincia e comune |
+| `js/data-growth.js` | standard di crescita OMS 0-24 mesi (non modificare) |
+| `js/areas/*.js` | pacchetti di zona |
+| `sync/piccoli-passi-sync.gs` | servizio (Apps Script); `js/sync-script.js` ne contiene una copia per il pulsante «Copia il codice» |
 
-Dopo una modifica, aumenta il numero in `CACHE` dentro `sw.js` (es. `piccoli-passi-v2`), così i telefoni scaricano la nuova versione.
-
-Per provarla sul computer: `npx http-server .` e apri l'indirizzo indicato.
+Dopo una modifica, aumenta il numero in `CACHE` dentro `sw.js`, così i telefoni scaricano la nuova versione. Per provarla sul computer: `npx http-server .`
 
 ---
 

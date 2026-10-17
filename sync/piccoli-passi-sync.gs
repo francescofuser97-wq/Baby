@@ -1,8 +1,10 @@
 /**
- * Piccoli Passi – servizio di condivisione per la famiglia (Google Apps Script).
+ * Piccoli Passi – servizio di condivisione e notizie (Google Apps Script).
  *
- * I dati condivisi vengono salvati in un file nel Google Drive di chi pubblica questo script.
- * Ogni famiglia ha un codice segreto: solo chi lo conosce può leggere e scrivere i dati.
+ * Può essere usato da una sola famiglia o da tante (servizio centrale indicato in js/config.js).
+ * Ogni famiglia ha uno «spazio»: un file nel Google Drive di chi pubblica questo script.
+ * L'app cifra i dati sul telefono prima di inviarli (AES-GCM) e manda solo l'identificativo dello
+ * spazio, mai il codice segreto: chi gestisce il servizio vede solo dati illeggibili.
  * Il servizio legge anche le notizie di Google News sugli eventi per bambini del comune scelto
  * (l'app da sola non può farlo, perché i browser bloccano queste richieste).
  *
@@ -16,13 +18,16 @@ function doGet() {
 }
 
 function doPost(e) {
+  var req;
+  try { req = JSON.parse(e.postData.contents || '{}'); } catch (err) { return json_({ error: 'richiesta non valida' }); }
+  // Notizie: nessun dato personale e nessun codice; non blocca le sincronizzazioni delle famiglie
+  if (req.action === 'news') return json_(news_(req.q));
+
   var lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  lock.waitLock(25000);
   try {
-    var req = JSON.parse(e.postData.contents || '{}');
-    var key = String(req.key || '');
+    var key = String(req.key || '');                          // identificativo dello spazio
     if (key.length < 20) return json_({ error: 'codice non valido' });
-    if (req.action === 'news') return json_(news_(req.q));
 
     var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, key);
     var name = FILE_PREFIX + Utilities.base64EncodeWebSafe(digest).replace(/=+$/, '').slice(0, 32) + '.json';
@@ -33,6 +38,7 @@ function doPost(e) {
     // Unisce le modifiche: per ogni elemento vince la modifica più recente
     var changes = req.changes || [];
     var applied = 0;
+    if (changes.length > 2000) return json_({ error: 'troppe modifiche in una volta' });
     for (var i = 0; i < changes.length; i++) {
       var c = changes[i];
       if (!c || typeof c.k !== 'string') continue;
