@@ -2,14 +2,15 @@
 
 Web app installabile (PWA) per famiglie con bambini da 0 a 3 anni, utilizzabile in tutta Italia:
 
-- **Oggi**: età del bimbo, fase dello svezzamento, il mese di vita, consiglio, ricetta e gioco del giorno, prossimi appuntamenti ed eventi.
-- **Ricette**: 32 ricette con approccio misto (versione **pappa** 🥄 e **a pezzi** ✋), in stile app di cucina: carosello, griglia fotografica, scheda a tutto schermo, ingredienti con icone e **cucina passo passo** (schermo sempre acceso e timer). Per chi ha il **Bimby®** c'è la versione con tempo, temperatura e velocità. Si può aggiungere la propria foto del piatto.
-- **Guida**: svezzamento passo passo, pezzi sicuri, conato o soffocamento, allergeni, diario dei cibi e percorso allergeni.
-- **Salute**: agenda, bilanci di salute, vaccinazioni, curve di crescita OMS, domande per il pediatra, guide «Come si fa», azienda sanitaria della propria zona.
-- **Giochi**: attività per età, tappe dello sviluppo, mese per mese, consigli, libri e filastrocche.
-- **Eventi**: eventi per bambini del proprio comune trovati in automatico nelle notizie locali (con la data messa in calendario), elenchi curati per alcune zone, luoghi e servizi vicini.
-- **Emergenze** (🆘): numeri utili, pronto soccorso più vicino, disostruzione, febbre, ingestioni, ustioni.
-- **Più figli** con profili separati, **condivisione cifrata** con chi si vuole (partner, nonni), tema chiaro/scuro.
+L'app è divisa in cinque sezioni:
+
+- **Oggi**: il riquadro del mese (illustrazione, età, avanzamento, aggiornamento del mese), il diario di oggi con l'aggiunta rapida (pappa, latte, nanna con timer, pannolino, foto, peso), appuntamenti e vaccinazioni in arrivo, allergene da introdurre, consiglio, ricetta, gioco ed eventi del giorno.
+- **Diario**: calendario mensile; per ogni giorno pappe (con i cibi, che entrano da soli tra i cibi provati), latte, nanne (anche a cavallo della mezzanotte), pannolini, peso e misure (che finiscono nelle curve di crescita), salute (febbre, farmaci, sintomi), prime volte, note e foto. Poi **Ricordi** (tutte le foto per mese) e **Andamento** (sonno, poppate, pappe e pannolini delle ultime due settimane).
+- **Pappa**: ricette (con versione Bimby®), guida allo svezzamento, cibi provati, percorso allergeni.
+- **Salute**: agenda, bilanci, vaccinazioni, curve di crescita OMS, domande per il pediatra, guide «Come si fa», azienda sanitaria della zona; dal 🆘 in alto le emergenze.
+- **Scopri**: giochi e tappe dello sviluppo, mese per mese, libri e filastrocche, eventi e luoghi del proprio comune.
+
+Più figli con profili separati, condivisione cifrata con la famiglia (anche le foto del diario), tema chiaro/scuro.
 
 ## Come funziona per ogni comune
 
@@ -43,7 +44,7 @@ Pubblicazione: su [script.google.com](https://script.google.com) nuovo progetto 
 - Ogni famiglia ha uno spazio identificato da un codice segreto (inviti `PP2-…`). Il telefono ricava dal codice tre chiavi: l'identificativo dello spazio, una chiave **AES-GCM** per cifrare i dati e una chiave **HMAC** per rendere irriconoscibili i nomi dei dati.
 - Al servizio arrivano solo identificativo e dati cifrati: chi lo gestisce (e Google) non può leggere nomi, date, diario o misure, né sapere di quale comune si tratta.
 - Per le notizie si invia solo il nome del comune (al servizio, oppure ai lettori pubblici rss2json.com e allorigins.win se il servizio non c'è).
-- Le foto dei piatti non lasciano mai il telefono.
+- Le foto del diario, con la condivisione attiva, partono già cifrate e il servizio le salva in file separati nella cartella «Piccoli Passi - foto» (servizio versione 5 o successiva; con una versione precedente restano sul telefono). Le foto dei piatti non lasciano mai il telefono.
 - Gli spazi creati con la versione precedente (codici `PP1-…`, dati in chiaro) continuano a funzionare e si possono convertire con **Passa alla cifratura**.
 - Il codice di invito dà accesso ai dati della famiglia: va mandato solo a persone di fiducia.
 

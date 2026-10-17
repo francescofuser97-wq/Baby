@@ -12,7 +12,7 @@
  *   Esegui come: Me · Chi ha accesso: Chiunque
  */
 var FILE_PREFIX = 'piccoli-passi-';
-var VERSION = 4;
+var VERSION = 5;
 
 function doGet() {
   return json_({ ok: true, app: 'piccoli-passi', v: VERSION, msg: 'Servizio di condivisione attivo.' });
@@ -23,6 +23,8 @@ function doPost(e) {
   try { req = JSON.parse(e.postData.contents || '{}'); } catch (err) { return json_({ error: 'richiesta non valida' }); }
   // Notizie: nessun dato personale e nessun codice; non blocca le sincronizzazioni delle famiglie
   if (req.action === 'news') return json_(news_(req.q));
+  // Foto del diario: arrivano già cifrate dal telefono, una per file
+  if (req.action === 'blob-put' || req.action === 'blob-get' || req.action === 'blob-del') return json_(blob_(req));
 
   var key = String(req.key || '');                            // identificativo dello spazio
   if (key.length < 20) return json_({ error: 'codice non valido' });
@@ -74,6 +76,28 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/* Foto: un file per foto nella cartella «Piccoli Passi - foto» del Drive. Il contenuto è cifrato dal telefono
+   con il codice della famiglia: qui non si può vedere. */
+function blob_(req) {
+  var key = String(req.key || ''), id = String(req.id || '');
+  if (key.length < 20 || !/^[A-Za-z0-9_-]{8,40}$/.test(id)) return { error: 'richiesta non valida' };
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, key);
+  var name = FILE_PREFIX + Utilities.base64EncodeWebSafe(digest).replace(/=+$/, '').slice(0, 32) + '-foto-' + id + '.txt';
+  var it = DriveApp.getFilesByName(name), file = null;
+  while (it.hasNext()) { var f = it.next(); if (!f.isTrashed()) { file = f; break; } }
+  if (req.action === 'blob-get') return file ? { data: file.getBlob().getDataAsString() } : { error: 'foto non trovata' };
+  if (req.action === 'blob-del') { if (file) file.setTrashed(true); return { ok: true }; }
+  var data = String(req.data || '');
+  if (!data || data.length > 8000000) return { error: 'foto troppo grande' };
+  if (file) file.setContent(data);
+  else {
+    var folders = DriveApp.getFoldersByName('Piccoli Passi - foto');
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Piccoli Passi - foto');
+    folder.createFile(name, data, 'text/plain');
+  }
+  return { ok: true };
 }
 
 /* Trova il file dello spazio. L'indirizzo del file è ricordato nelle proprietà dello script (più veloce

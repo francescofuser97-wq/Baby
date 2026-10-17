@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.5.0";
+  const VERSION = "5.0.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -16,7 +16,7 @@
     del(k) { try { localStorage.removeItem("pp." + k); } catch (e) { /* ignore */ } }
   };
   // Dati di ogni figlio (salvati come "k.<id>.<chiave>") e dati in comune per la famiglia
-  const KID_KEYS = ["foods", "ready", "done", "growth", "health", "appts", "questions"];
+  const KID_KEYS = ["foods", "ready", "done", "growth", "health", "appts", "questions", "diary"];
   const SHARED_KEYS = ["favs", "myEvents", "contacts", "evKm", "theme", "videos", "home"];
   let kids = raw.get("kids", null);
   let activeKid = raw.get("activeKid", null);
@@ -53,11 +53,12 @@
       raw.set(KID_KEYS.includes(k) ? "k." + activeKid + "." + k : k, v);
     }
   };
-  let settings, foods, ready, done, growth, health, appts, questions;
+  let settings, foods, ready, done, growth, health, appts, questions, diary;
   function loadKid() {
     settings = S.get("settings", null);
     foods = S.get("foods", {}); ready = S.get("ready", {}); done = S.get("done", {});
     growth = S.get("growth", []); health = S.get("health", {}); appts = S.get("appts", []); questions = S.get("questions", []);
+    diary = S.get("diary", []);
   }
   loadKid();
   let favs = S.get("favs", {});
@@ -180,9 +181,18 @@
   }
 
   /* ---------------- Router ---------------- */
-  const TITLES = { oggi: "Piccoli Passi", ricette: "Ricette", ricetta: "Ricetta", guida: "Guida allo svezzamento", sezione: "Guida", diario: "Diario dei cibi", giochi: "Giochi e crescita", attivita: "Gioco", eventi: "Eventi e luoghi", impostazioni: "Impostazioni", allergeni: "Percorso allergeni", salute: "Salute", emergenze: "Emergenze", mese: "Info mensili" };
-  const PARENT = { ricetta: "#/ricette", sezione: "#/guida", diario: "#/guida", attivita: "#/giochi", impostazioni: "#/oggi", allergeni: "#/guida", emergenze: "#/salute", mese: "#/giochi" };
-  const TAB_OF = { ricetta: "ricette", sezione: "guida", diario: "guida", attivita: "giochi", allergeni: "guida", emergenze: "salute", mese: "giochi" };
+  const TITLES = { oggi: "Piccoli Passi", ricette: "Pappa", ricetta: "Ricetta", guida: "Pappa", sezione: "Guida", diario: "Diario", cibi: "Pappa", giochi: "Scopri", attivita: "Gioco", eventi: "Scopri", impostazioni: "Impostazioni", allergeni: "Pappa", salute: "Salute", emergenze: "Emergenze", mese: "Scopri" };
+  const PARENT = { ricetta: "#/ricette", sezione: "#/guida", attivita: "#/giochi", impostazioni: "#/oggi", emergenze: "#/salute" };
+  // Cinque sezioni: Oggi, Diario, Pappa (ricette, guida, cibi, allergeni), Salute, Scopri (giochi, mese per mese, eventi)
+  const TAB_OF = { ricette: "pappa", ricetta: "pappa", guida: "pappa", sezione: "pappa", cibi: "pappa", allergeni: "pappa", giochi: "scopri", attivita: "scopri", mese: "scopri", eventi: "scopri", emergenze: "salute" };
+  const HUBS = {
+    pappa: [["ricette", "🥣 Ricette"], ["guida", "📖 Guida"], ["cibi", "📒 Cibi provati"], ["allergeni", "⚠️ Allergeni"]],
+    scopri: [["giochi", "🧸 Giochi"], ["mese", "📆 Mese per mese"], ["eventi", "📍 Eventi"]]
+  };
+  const hubNav = view => {
+    const h = HUBS[TAB_OF[view]];
+    return h && h.some(([v]) => v === view) ? `<nav class="hubnav" aria-label="Sottosezioni">${h.map(([v, l]) => `<a href="#/${v}" class="${v === view ? "on" : ""}">${l}</a>`).join("")}</nav>` : "";
+  };
 
   function parseRoute() {
     const h = location.hash.replace(/^#\/?/, "");
@@ -192,12 +202,16 @@
 
   function viewHtml(r) {
     if (!settings) return viewWelcome();
+    return hubNav(r.view) + viewPage(r);
+  }
+  function viewPage(r) {
     switch (r.view) {
       case "ricette": return viewRecipes();
       case "ricetta": return viewRecipe(r.id);
       case "guida": return viewGuide();
       case "sezione": return viewSection(r.id);
       case "diario": return viewDiary();
+      case "cibi": return viewFoods();
       case "giochi": return viewPlay();
       case "attivita": return viewActivity(r.id);
       case "eventi": return viewEvents();
@@ -225,6 +239,7 @@
     const y = window.scrollY;
     app.innerHTML = viewHtml(r);
     hydratePhotos();
+    hydrateDiaryPhotos(app);
     wireCarousel(app);
     // scheda ricetta a tutto schermo: immagine in alto con i pulsanti sopra, senza barra superiore
     document.body.classList.toggle("immersive", r.view === "ricetta" && settings != null);
@@ -665,21 +680,17 @@
         </span>
       </a>` : ""}
 
+      ${sleepLiveCard()}
+      ${todayDiaryCard()}
+      ${healthTodayCard()}
+      ${allergenTodayCard()}
+      ${readiness}
+
       <a class="card tint-green" href="${ph.link}">
         <div class="card-kicker">${ph.e} Fase attuale</div>
         <h3>${ph.t}</h3>
         <p class="small">${ph.d}</p>
       </a>
-      
-
-      <div class="quick">
-        <a href="#/salute"><span>🩺</span>Salute</a><a href="#/allergeni"><span>⚠️</span>Allergeni</a><a href="#/emergenze"><span>🆘</span>Emergenze</a>
-      </div>
-
-      ${homeOf() ? "" : homePrompt("Eventi, servizi, sito del Comune e azienda sanitaria (ASL) della tua zona.")}
-      ${healthTodayCard()}
-      ${allergenTodayCard()}
-      ${readiness}
 
       ${tip ? `<div class="card tint-yellow"><div class="card-kicker">💡 Consiglio del giorno · ${esc(tip.cat)}</div><p>${esc(tip.t)}</p></div>` : ""}
 
@@ -694,12 +705,13 @@
       <div class="section-title"><h2>Prossimi eventi</h2><a href="#/eventi">Tutti ›</a></div>
       ${evs.length ? evs.map(eventMini).join("") : `<div class="card muted small">Nessun evento in calendario: dai un'occhiata ai <a href="#/eventi">luoghi e servizi</a>.</div>`}
 
-      <div class="section-title"><h2>Diario dei cibi</h2><a href="#/diario">Apri ›</a></div>
-      <a class="card list-card" href="#/diario">
+      <div class="section-title"><h2>Cibi provati</h2><a href="#/cibi">Apri ›</a></div>
+      <a class="card list-card" href="#/cibi">
         <div class="big-emoji">📒</div>
         <div class="grow"><h3>${plural(tried, "cibo provato", "cibi provati")}</h3>
         <div class="meta">Allergeni introdotti: ${alDone}/${KEY_ALLERGENS.length}</div></div>
       </a>
+      ${homeOf() ? "" : homePrompt("Eventi, servizi, sito del Comune e azienda sanitaria (ASL) della tua zona.")}
       <p class="disclaimer">Le informazioni di questa app non sostituiscono il parere del pediatra.</p>`;
   }
 
@@ -971,7 +983,7 @@
   function viewGuide() {
     const tried = Object.keys(foods).length;
     return `
-      <a class="card list-card tint-green" href="#/diario">
+      <a class="card list-card tint-green" href="#/cibi">
         <div class="big-emoji">📒</div>
         <div class="grow"><h3>Diario dei cibi e allergeni</h3><div class="meta">${plural(tried, "cibo provato", "cibi provati")} · segna assaggi e reazioni</div></div>
       </a>
@@ -1011,7 +1023,7 @@
   const REACT = { si: ["😋", "Gli piace"], meh: ["😐", "Così così"], no: ["🙅", "Rifiutato"], reaz: ["⚠️", "Reazione"] };
   function allergenIntroduced(k) { return FOODS.some(f => f.al === k && foods[f.id]); }
 
-  function viewDiary() {
+  function viewFoods() {
     const tried = Object.keys(foods).length;
     const q = ui.fQ.toLowerCase();
     const groups = FOOD_CATS.map(c => {
@@ -1069,6 +1081,385 @@
           ${foods[id] ? `<button class="btn ghost" type="button" data-act="food-again" data-id="${id}">🔁 Offerto di nuovo oggi</button><button class="btn danger" type="button" data-act="food-del" data-id="${id}">Rimuovi</button>` : ""}
           <button class="btn ghost" type="button" data-act="close">Annulla</button></div>
       </form>`);
+  }
+
+  /* ---------------- Diario: calendario della giornata ---------------- */
+  // Ogni voce: { id, date, time, type, ... }. Le voci eliminate restano con del: true: così un telefono con una
+  // versione vecchia dell'app (che non conosce il diario) non può cancellarle dagli altri telefoni della famiglia.
+  const LOG_TYPES = {
+    pasto: { e: "🥣", n: "Pappa", c: "peach" },
+    latte: { e: "🍼", n: "Latte", c: "blue" },
+    sonno: { e: "😴", n: "Nanna", c: "purple" },
+    pannolino: { e: "🧷", n: "Pannolino", c: "yellow" },
+    misure: { e: "📏", n: "Peso e misure", c: "green" },
+    salute: { e: "🌡️", n: "Salute", c: "pink" },
+    traguardo: { e: "⭐", n: "Prima volta", c: "yellow" },
+    nota: { e: "📝", n: "Nota", c: "gray" },
+    foto: { e: "📷", n: "Foto", c: "gray" }
+  };
+  const ADD_ORDER = ["pasto", "latte", "sonno", "pannolino", "foto", "misure", "salute", "traguardo", "nota"];
+  const FIRST_TIMES = ["Primo sorriso", "Si gira da solo", "Sta seduto", "Primo dentino", "Gattona", "Prima pappa", "Prima parola", "Si alza in piedi", "Primi passi", "Dice «mamma» o «papà»"];
+  const MOODS = ["😊", "😄", "😐", "😢", "😴", "🤒"];
+  const nowHM = () => { const d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const toMin = t => { const p = String(t || "0:0").split(":").map(Number); return (p[0] || 0) * 60 + (p[1] || 0); };
+  const durTxt = m => (m >= 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + String(m % 60).padStart(2, "0") : "") : Math.max(0, m) + " min");
+  const diaryAll = () => (diary || []).filter(x => x && !x.del);
+  const sleeping = () => diaryAll().find(x => x.type === "sonno" && !x.end);
+  function sleepMin(x) {
+    if (!x.end) {
+      const st = parseISO(x.date); st.setHours(0, toMin(x.time), 0, 0);
+      return Math.max(0, Math.round((Date.now() - st) / 60000));
+    }
+    let d = toMin(x.end) - toMin(x.time);
+    if (x.endDate && x.endDate !== x.date) d += 1440 * daysBetween(parseISO(x.date), parseISO(x.endDate));
+    else if (d < 0) d += 1440;
+    return d;
+  }
+  // Voci di un giorno: diario + misure (stanno nelle curve di crescita) + appuntamenti in agenda
+  function dayItems(d) {
+    const xs = diaryAll().filter(x => x.date === d)
+      .concat(growth.filter(g => g.date === d).map(g => Object.assign({ type: "misure", time: g.time || "", growth: true }, g)));
+    return xs.sort((a, b) => String(a.time || "99").localeCompare(String(b.time || "99")));
+  }
+  function daySummary(d) {
+    const s = { sonno: 0, latte: 0, ml: 0, pasto: 0, pannolino: 0, foto: 0 };
+    diaryAll().filter(x => x.date === d).forEach(x => {
+      if (x.type === "sonno") s.sonno += sleepMin(x);
+      else if (x.type === "latte") { s.latte++; s.ml += Number(x.ml) || 0; }
+      else if (x.type === "foto") s.foto += (x.photos || []).length;
+      else if (s[x.type] != null) s[x.type]++;
+    });
+    return s;
+  }
+  function summaryChips(s) {
+    const c = [];
+    if (s.sonno) c.push(`😴 ${durTxt(s.sonno)}`);
+    if (s.latte) c.push(`🍼 ${s.latte}${s.ml ? " · " + s.ml + " ml" : ""}`);
+    if (s.pasto) c.push(`🥣 ${s.pasto}`);
+    if (s.pannolino) c.push(`🧷 ${s.pannolino}`);
+    if (s.foto) c.push(`📷 ${s.foto}`);
+    return c.map(x => `<span class="tag">${x}</span>`).join("");
+  }
+  const foodName = id => (FOODS.find(f => f.id === id) || { n: id }).n;
+  function logTitle(x) {
+    switch (x.type) {
+      case "pasto": return (x.foods || []).map(foodName).join(", ") || "Pappa";
+      case "latte": return x.kind === "biberon" ? "Biberon" + (x.ml ? " · " + x.ml + " ml" : "") : "Seno" + (x.side ? " " + ({ sx: "sinistro", dx: "destro", entrambi: "entrambi" })[x.side] : "") + (x.min ? " · " + x.min + " min" : "");
+      case "sonno": return x.end ? "Nanna di " + durTxt(sleepMin(x)) : "Sta dormendo da " + durTxt(sleepMin(x));
+      case "pannolino": return ({ pipi: "Pipì", cacca: "Cacca", entrambi: "Pipì e cacca" })[x.kind] || "Pannolino";
+      case "misure": return [x.w ? String(x.w).replace(".", ",") + " kg" : "", x.l ? String(x.l).replace(".", ",") + " cm" : "", x.h ? "testa " + String(x.h).replace(".", ",") + " cm" : ""].filter(Boolean).join(" · ");
+      case "salute": return [x.temp ? String(x.temp).replace(".", ",") + " °C" : "", x.sym || "", x.med ? "💊 " + x.med : ""].filter(Boolean).join(" · ") || "Salute";
+      case "traguardo": return x.t || "Una prima volta";
+      case "nota": return (x.mood ? x.mood + " " : "") + (x.t || "Nota");
+      case "foto": return x.t || plural((x.photos || []).length, "foto", "foto");
+    }
+    return "";
+  }
+  function logSub(x) {
+    const bits = [];
+    if (x.time) bits.push(x.type === "sonno" && x.end ? x.time + "–" + x.end : x.time);
+    if (x.type === "pasto") { if (x.q) bits.push(({ poco: "ne ha mangiato poco", meta: "circa metà", tutto: "tutto" })[x.q]); if (x.r && REACT[x.r]) bits.push(REACT[x.r][0] + " " + REACT[x.r][1]); }
+    if (x.note) bits.push(x.note);
+    return bits.join(" · ");
+  }
+  const phImg = id => `<img data-ph="${esc(id)}" alt="Foto" loading="lazy">`;
+  function logItem(x) {
+    const T = LOG_TYPES[x.type] || LOG_TYPES.nota;
+    return `<button class="lg-item" data-act="${x.growth ? "g-edit" : "log-edit"}" data-id="${esc(x.id)}">
+      <span class="lg-ic lc-${T.c}">${T.e}</span>
+      <span class="grow"><b>${esc(logTitle(x))}</b>${logSub(x) ? `<small>${esc(logSub(x))}</small>` : ""}
+        ${x.type === "foto" && (x.photos || []).length ? `<span class="lg-photos">${x.photos.map(phImg).join("")}</span>` : ""}</span>
+      ${x.type === "sonno" && !x.end ? `<span class="tag purple">in corso</span>` : ""}</button>`;
+  }
+  const addButtons = d => `<div class="lg-add">${ADD_ORDER.map(k => `<button data-act="log-add" data-type="${k}" data-d="${d}"><span class="lg-ic lc-${LOG_TYPES[k].c}">${LOG_TYPES[k].e}</span>${LOG_TYPES[k].n}</button>`).join("")}</div>`;
+  function sleepLiveCard() {
+    const x = sleeping();
+    if (!x) return "";
+    return `<div class="card lg-live"><span class="lg-ic lc-purple">😴</span><div class="grow"><b>${name()} sta dormendo</b><div class="small muted">dalle ${esc(x.time)}${x.date !== iso(today0()) ? " di ieri" : ""} · ${durTxt(sleepMin(x))}</div></div>
+      <button class="btn small" data-act="sleep-stop" data-id="${esc(x.id)}">Si è svegliato</button></div>`;
+  }
+  // In «Oggi»: aggiunta rapida al diario e riepilogo della giornata
+  function todayDiaryCard() {
+    const d = iso(today0()), items = dayItems(d), s = daySummary(d);
+    const q = [["pasto", "Pappa"], ["latte", "Latte"], sleeping() ? null : ["sonno", "Nanna"], ["pannolino", "Pannolino"], ["foto", "Foto"], ["misure", "Peso"]].filter(Boolean);
+    return `<div class="card lg-today">
+      <div class="section-title" style="margin:0 0 8px"><h2>Il diario di oggi</h2><a href="#/diario">Calendario ›</a></div>
+      <div class="lg-quick">${q.map(([k, l]) => k === "sonno"
+        ? `<button data-act="sleep-start"><span class="lg-ic lc-purple">😴</span>${l}</button>`
+        : `<button data-act="log-add" data-type="${k}" data-d="${d}"><span class="lg-ic lc-${LOG_TYPES[k].c}">${LOG_TYPES[k].e}</span>${l}</button>`).join("")}
+        <a href="#/diario" class="lg-more"><span class="lg-ic lc-gray">＋</span>Altro</a></div>
+      ${summaryChips(s) ? `<div style="margin-top:10px">${summaryChips(s)}</div>` : ""}
+      ${items.length ? `<div class="lg-list" style="margin-top:8px">${items.slice(-3).reverse().map(logItem).join("")}</div>` : `<p class="small muted" style="margin:10px 0 0">Tocca un'icona per segnare pappe, poppate, nanne, pannolini o una foto: tutto finisce nel calendario${raw.get("sync", null) ? " e lo vede anche la famiglia" : ""}.</p>`}
+    </div>`;
+  }
+  function ageAt(d) {
+    if (!settings || !settings.birth) return null;
+    const b = parseISO(settings.birth), t = parseISO(d);
+    if (t < b) return null;
+    let m = (t.getFullYear() - b.getFullYear()) * 12 + t.getMonth() - b.getMonth();
+    if (addMonths(b, m) > t) m--;
+    return { m, d: daysBetween(addMonths(b, m), t), total: daysBetween(b, t) };
+  }
+
+  function viewDiary() {
+    const today = iso(today0());
+    const tab = ui.dTab || "cal";
+    const seg = (v, label) => `<button class="${tab === v ? "on" : ""}" data-act="set" data-k="dTab" data-v="${v}">${segLabel(label)}</button>`;
+    let body;
+    if (tab === "foto") body = viewMemories();
+    else if (tab === "trend") body = viewTrends();
+    else {
+      const sel = ui.dSel || today, mon = ui.dMon || sel.slice(0, 7) + "-01";
+      const first = parseISO(mon), y = first.getFullYear(), mo = first.getMonth();
+      const lead = (first.getDay() + 6) % 7, nDays = new Date(y, mo + 1, 0).getDate();
+      const byDay = {};
+      diaryAll().forEach(x => { if (x.date.startsWith(mon.slice(0, 7))) (byDay[x.date] = byDay[x.date] || []).push(x); });
+      growth.forEach(g => { if (g.date && g.date.startsWith(mon.slice(0, 7))) (byDay[g.date] = byDay[g.date] || []).push({ type: "misure" }); });
+      const apptDays = new Set(appts.map(a => a.date));
+      const cells = [];
+      for (let i = 0; i < lead; i++) cells.push(`<span class="cal-d off"></span>`);
+      for (let n = 1; n <= nDays; n++) {
+        const d = iso(new Date(y, mo, n)), xs = byDay[d] || [];
+        const types = [...new Set(xs.map(x => x.type))].slice(0, 4);
+        const ph = xs.find(x => x.type === "foto" && (x.photos || []).length);
+        const before = settings.birth && d < settings.birth;
+        cells.push(`<button class="cal-d${d === sel ? " sel" : ""}${d === today ? " today" : ""}${d > today || before ? " dim" : ""}${ph ? " has-ph" : ""}" data-act="cal-day" data-d="${d}" aria-label="${fmt(parseISO(d), { weekday: "long", day: "numeric", month: "long" })}">
+          ${ph ? phImg(ph.photos[0]) : ""}<b>${n}</b>
+          <span class="cal-dots">${types.map(t => `<i class="lc-${LOG_TYPES[t].c}"></i>`).join("")}${apptDays.has(d) ? `<i class="lc-appt"></i>` : ""}</span></button>`);
+      }
+      const items = dayItems(sel), ap = appts.filter(a => a.date === sel), a = ageAt(sel);
+      const s = daySummary(sel);
+      body = `
+        <div class="cal-head">
+          <button class="rd-btn" data-act="cal-mon" data-d="-1" aria-label="Mese precedente">‹</button>
+          <h2>${fmt(first, { month: "long", year: "numeric" })}</h2>
+          <button class="rd-btn" data-act="cal-mon" data-d="1" aria-label="Mese successivo">›</button>
+        </div>
+        <div class="cal-grid">${["L", "M", "M", "G", "V", "S", "D"].map(w => `<span class="cal-w">${w}</span>`).join("")}${cells.join("")}</div>
+        ${sel !== today ? `<button class="link-btn small" data-act="cal-day" data-d="${today}" style="margin:6px 0 0">↩︎ Torna a oggi</button>` : ""}
+        <div class="lg-day">
+          <h2>${sel === today ? "Oggi" : fmt(parseISO(sel), { weekday: "long", day: "numeric", month: "long" })}</h2>
+          ${a ? `<div class="small muted">${name()} aveva ${ageText(a)}</div>` : ""}
+          ${summaryChips(s) ? `<div style="margin-top:8px">${summaryChips(s)}</div>` : ""}
+        </div>
+        ${sel === today ? sleepLiveCard() : ""}
+        ${ap.map(x => `<a class="lg-item" href="#/salute"><span class="lg-ic lc-appt">📅</span><span class="grow"><b>${esc(x.t || APPT_TYPES[x.type])}</b><small>${esc(x.time || "")}${x.place ? " · " + esc(x.place) : ""}</small></span></a>`).join("")}
+        ${items.length ? `<div class="lg-list">${items.map(logItem).join("")}</div>` : `<p class="small muted">${sel > today ? "È un giorno futuro: puoi già segnare un appuntamento in Salute." : "Ancora niente in questo giorno. Aggiungi qualcosa qui sotto."}</p>`}
+        ${sel <= today ? `<div class="section-title"><h2>Aggiungi</h2></div>${addButtons(sel)}` : ""}`;
+    }
+    return `<div class="segmented">${seg("cal", "📅 Calendario")}${seg("foto", "📷 Ricordi")}${seg("trend", "📊 Andamento")}</div>${body}`;
+  }
+  function viewMemories() {
+    const xs = diaryAll().filter(x => x.type === "foto" && (x.photos || []).length).sort((a, b) => (b.date + (b.time || "")).localeCompare(a.date + (a.time || "")));
+    if (!xs.length) return `<div class="empty"><b>📷</b>Ancora nessuna foto. Aggiungine una dal calendario: resterà nel diario del giorno.</div>
+      <button class="btn block" data-act="log-add" data-type="foto" data-d="${iso(today0())}">📷 Aggiungi una foto</button>`;
+    const groups = {};
+    xs.forEach(x => { const k = x.date.slice(0, 7); (groups[k] = groups[k] || []).push(x); });
+    const share = raw.get("sync", null) ? (raw.get("photoShare", 0) ? `<p class="small muted">Le foto per ora restano su questo telefono: per vederle anche sugli altri telefoni della famiglia va aggiornato il servizio Google (versione 5).</p>` : `<p class="small muted">Le foto vengono cifrate e condivise con la famiglia.</p>`) : "";
+    return share + Object.keys(groups).map(k => {
+      const a = ageAt(k + "-15");
+      const lbl = fmt(parseISO(k + "-01"), { month: "long", year: "numeric" });
+      return `<div class="section-title"><h2>${lbl.charAt(0).toUpperCase() + lbl.slice(1)}</h2><span class="small muted">${a ? plural(a.m, "mese", "mesi") : ""}</span></div>
+        <div class="ph-grid">${groups[k].flatMap(x => x.photos.map(id => `<button data-act="photo-open" data-id="${esc(id)}" data-e="${esc(x.id)}">${phImg(id)}</button>`)).join("")}</div>`;
+    }).join("");
+  }
+  function viewTrends() {
+    const days = Array.from({ length: 14 }, (_, i) => iso(addDays(today0(), i - 13)));
+    const data = days.map(d => Object.assign({ d }, daySummary(d)));
+    const bars = (k, fmtV, unit) => {
+      const max = Math.max(1, ...data.map(x => x[k]));
+      return `<div class="tr-bars">${data.map(x => `<span title="${fmtV(x[k])}"><i style="height:${Math.round(x[k] / max * 100)}%"></i><small>${parseISO(x.d).getDate()}</small></span>`).join("")}</div>
+        <p class="small muted" style="margin:6px 0 0">Media: <b>${fmtV(Math.round(data.filter(x => x[k]).reduce((a, x) => a + x[k], 0) / Math.max(1, data.filter(x => x[k]).length)))}</b>${unit} nei giorni segnati</p>`;
+    };
+    const any = data.some(x => x.sonno || x.latte || x.pannolino || x.pasto);
+    if (!any) return `<div class="empty"><b>📊</b>Qui vedrai l'andamento di nanne, poppate e pannolini delle ultime due settimane, man mano che li segni nel diario.</div>`;
+    return `<div class="card"><h2>😴 Sonno al giorno</h2>${bars("sonno", durTxt, "")}</div>
+      <div class="card"><h2>🍼 Poppate e biberon</h2>${bars("latte", v => String(v), " al giorno")}</div>
+      <div class="card"><h2>🥣 Pappe</h2>${bars("pasto", v => String(v), " al giorno")}</div>
+      <div class="card"><h2>🧷 Pannolini</h2>${bars("pannolino", v => String(v), " al giorno")}</div>
+      <p class="disclaimer">Ogni bambino ha i suoi ritmi: l'andamento serve a voi e al pediatra per capire le abitudini, non è un voto.</p>`;
+  }
+
+  // Modulo per aggiungere o modificare una voce
+  let pendingPhotos = [];
+  function openLog(type, date, id) {
+    const x = id ? diary.find(v => v.id === id) : null;
+    type = x ? x.type : type;
+    if (type === "misure") { openAddGrowth(date); return; }
+    const T = LOG_TYPES[type], v = x || {}, d = date || (x && x.date) || iso(today0());
+    pendingPhotos = [];
+    const pick = (nm, opts, cur) => `<div class="lg-pick" data-name="${nm}">${opts.map(([k, l]) => `<button type="button" class="${cur === k ? "on" : ""}" data-act="lg-pick" data-v="${k}">${l}</button>`).join("")}</div><input type="hidden" name="${nm}" value="${esc(cur || "")}">`;
+    const time = (nm, label, val) => `<label class="field"><span>${label}</span><input type="time" name="${nm}" value="${esc(val || "")}"></label>`;
+    const note = `<label class="field"><span>Note</span><textarea name="note" placeholder="Facoltative">${esc(v.note || "")}</textarea></label>`;
+    let f = "";
+    if (type === "pasto") {
+      const sel = new Set(v.foods || []);
+      const recent = Object.keys(foods).sort((a, b) => foodLast(foods[b]).localeCompare(foodLast(foods[a]))).slice(0, 12);
+      const list = [...new Set([...sel, ...recent, ...FOODS.map(fd => fd.id)])];
+      f = time("time", "Ora", v.time || (d === iso(today0()) ? nowHM() : "12:30")) + `
+        <div class="field"><span>Che cosa ha mangiato?</span></div>
+        <input class="search" type="search" id="lgFoodQ" placeholder="Cerca un cibo (zucca, mela…)" autocomplete="off">
+        <div class="lg-foods" id="lgFoods">${list.map((fid, i) => `<button type="button" class="chip ${sel.has(fid) ? "on" : ""}" data-act="lg-food" data-id="${fid}" data-n="${esc(normTxt(foodName(fid)))}" ${i >= 18 && !sel.has(fid) ? "hidden" : ""}>${esc(foodName(fid))}${foods[fid] ? "" : " ✨"}</button>`).join("")}</div>
+        <p class="small muted" style="margin:-4px 0 10px">✨ = prima volta: verrà segnato anche tra i cibi provati.</p>
+        <input type="hidden" name="foods" value="${esc([...sel].join(","))}">
+        <div class="field"><span>Quanto?</span></div>${pick("q", [["poco", "Poco"], ["meta", "Metà"], ["tutto", "Tutto"]], v.q || "")}
+        <div class="field"><span>Com'è andata?</span></div>${pick("r", Object.keys(REACT).map(k => [k, REACT[k][0] + " " + REACT[k][1]]), v.r || "si")}` + note;
+    } else if (type === "latte") {
+      f = time("time", "Ora", v.time || nowHM()) + `<div class="field"><span>Come?</span></div>${pick("kind", [["seno", "🤱 Seno"], ["biberon", "🍼 Biberon"]], v.kind || "seno")}
+        <div class="field"><span>Lato (seno)</span></div>${pick("side", [["sx", "Sinistro"], ["dx", "Destro"], ["entrambi", "Entrambi"]], v.side || "")}
+        <div class="cols"><label class="field"><span>Quantità (ml)</span><input type="number" inputmode="numeric" name="ml" min="0" max="400" value="${esc(v.ml || "")}" placeholder="Biberon"></label>
+        <label class="field"><span>Durata (min)</span><input type="number" inputmode="numeric" name="min" min="0" max="120" value="${esc(v.min || "")}" placeholder="Seno"></label></div>` + note;
+    } else if (type === "sonno") {
+      f = `<div class="cols">${time("time", "Si è addormentato alle", v.time || nowHM())}${time("end", "Si è svegliato alle", v.end || "")}</div>
+        <p class="small muted" style="margin-top:-6px">Lascia vuoto «svegliato» se sta ancora dormendo: lo segni dopo con un tocco. Se si sveglia dopo mezzanotte, va bene lo stesso.</p>
+        <div class="field"><span>Tipo</span></div>${pick("kind", [["nanna", "☀️ Nanna di giorno"], ["notte", "🌙 Notte"]], v.kind || (toMin(nowHM()) > 19 * 60 ? "notte" : "nanna"))}` + note;
+    } else if (type === "pannolino") {
+      f = time("time", "Ora", v.time || nowHM()) + `<div class="field"><span>Com'era?</span></div>${pick("kind", [["pipi", "💧 Pipì"], ["cacca", "💩 Cacca"], ["entrambi", "Entrambi"]], v.kind || "pipi")}` + note;
+    } else if (type === "salute") {
+      f = time("time", "Ora", v.time || nowHM()) + `<div class="cols"><label class="field"><span>Temperatura (°C)</span><input type="text" inputmode="decimal" name="temp" value="${esc(v.temp || "")}" placeholder="Es. 37,8"></label>
+        <label class="field"><span>Farmaco e dose</span><input type="text" name="med" value="${esc(v.med || "")}" placeholder="Es. paracetamolo 2,5 ml"></label></div>
+        <label class="field"><span>Sintomi</span><input type="text" name="sym" value="${esc(v.sym || "")}" placeholder="Es. raffreddore, tosse, dentini"></label>` + note +
+        `<p class="small muted">Per dosi e farmaci segui sempre le indicazioni del pediatra. In emergenza chiama il 112.</p>`;
+    } else if (type === "traguardo") {
+      f = `<label class="field"><span>Che cosa ha fatto per la prima volta?</span><input type="text" name="t" required value="${esc(v.t || "")}" placeholder="Es. ha riso a crepapelle"></label>
+        <div class="chips" style="margin-top:-6px">${FIRST_TIMES.map(m => `<button type="button" class="chip" data-act="lg-fill" data-v="${esc(m)}">${esc(m)}</button>`).join("")}</div>` + time("time", "Ora (facoltativa)", v.time || "") + note;
+    } else if (type === "nota") {
+      f = `<div class="field"><span>Com'è andata la giornata?</span></div>${pick("mood", MOODS.map(m => [m, m]), v.mood || "")}
+        <label class="field"><span>Nota</span><textarea name="t" required placeholder="Una cosa da ricordare, un dubbio per il pediatra…">${esc(v.t || "")}</textarea></label>` + time("time", "Ora (facoltativa)", v.time || "");
+    } else if (type === "foto") {
+      f = `<label class="btn ghost block" style="cursor:pointer">📷 Scegli o scatta le foto<input type="file" accept="image/*" multiple data-act="lg-photo" hidden></label>
+        <div class="lg-photos big" id="lgPrev">${(v.photos || []).map(id => `<span data-keep="${esc(id)}">${phImg(id)}<button type="button" data-act="lg-unphoto" aria-label="Togli">✕</button></span>`).join("")}</div>
+        <label class="field"><span>Didascalia</span><input type="text" name="t" value="${esc(v.t || "")}" placeholder="Es. la prima volta al parco"></label>` + time("time", "Ora (facoltativa)", v.time || nowHM());
+    }
+    openSheet(`<h2>${T.e} ${x ? "Modifica · " : ""}${T.n}</h2>
+      <p class="small muted" style="margin-top:-6px">${fmt(parseISO(d), { weekday: "long", day: "numeric", month: "long" })}</p>
+      <form id="logForm" data-type="${type}" data-id="${esc(id || "")}" data-date="${d}">${f}
+        <div class="btn-row"><button class="btn" type="submit" style="flex:1">Salva</button>
+          ${x ? `<button class="btn danger" type="button" data-act="log-del" data-id="${esc(id)}">Elimina</button>` : ""}
+          <button class="btn ghost" type="button" data-act="close">Annulla</button></div>
+      </form>`);
+    hydrateDiaryPhotos(sheet);
+    const q = sheet.querySelector("#lgFoodQ");
+    if (q) q.addEventListener("input", () => {
+      const t = normTxt(q.value), btns = sheet.querySelectorAll("#lgFoods [data-act=lg-food]");
+      let shown = 0;
+      btns.forEach(b => {
+        const on = b.classList.contains("on"), show = on || ((t ? b.dataset.n.includes(t) : true) && shown < (t ? 40 : 18));
+        b.hidden = !show; if (show && !on) shown++;
+      });
+    });
+  }
+  function saveLog(f, fd) {
+    const type = f.dataset.type, id = f.dataset.id, d = f.dataset.date, old = id ? diary.find(v => v.id === id) : null;
+    const g = k => String(fd.get(k) || "").trim();
+    const x = Object.assign({}, old || {}, { id: id || "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date: d, type, time: g("time") });
+    if (fd.has("note")) x.note = g("note");
+    if (type === "pasto") {
+      x.foods = g("foods").split(",").filter(Boolean); x.q = g("q"); x.r = g("r") || "si";
+      if (!x.foods.length) { toast("Scegli almeno un cibo"); return false; }
+      // il diario dei cibi provati si aggiorna da solo
+      x.foods.forEach(fid => {
+        const e = foods[fid];
+        if (!e) foods[fid] = { date: d, r: x.r, n: 1, note: "", log: [d] };
+        else if (!old || !(old.foods || []).includes(fid)) { e.log = (e.log || [e.date]).filter(Boolean); if (!e.log.includes(d)) e.log.push(d); e.log = e.log.slice(-60); e.n = (e.n || 0) + 1; if (x.r === "reaz") e.r = "reaz"; }
+      });
+      S.set("foods", foods);
+    } else if (type === "latte") { x.kind = g("kind"); x.side = g("side"); x.ml = Number(g("ml")) || ""; x.min = Number(g("min")) || ""; }
+    else if (type === "sonno") {
+      x.kind = g("kind"); x.end = g("end") || null;
+      if (!x.time) { toast("Indica quando si è addormentato"); return false; }
+      x.endDate = x.end ? (toMin(x.end) < toMin(x.time) ? iso(addDays(parseISO(d), 1)) : d) : null;
+    }
+    else if (type === "pannolino") x.kind = g("kind");
+    else if (type === "salute") { x.temp = g("temp").replace(",", "."); x.med = g("med"); x.sym = g("sym"); if (!x.temp && !x.med && !x.sym && !x.note) { toast("Scrivi almeno una cosa"); return false; } }
+    else if (type === "traguardo") x.t = g("t");
+    else if (type === "nota") { x.t = g("t"); x.mood = g("mood"); }
+    else if (type === "foto") {
+      const keep = [...sheet.querySelectorAll("#lgPrev [data-keep]")].map(e => e.dataset.keep);
+      x.t = g("t");
+      if (!keep.length && !pendingPhotos.length) { toast("Aggiungi almeno una foto"); return false; }
+      const fresh = pendingPhotos.slice();
+      x.photos = keep.concat(fresh.map(p => p.id));
+      (old && old.photos || []).filter(pid => !keep.includes(pid)).forEach(dropPhoto);
+      toast("Salvo le foto…");
+      Promise.all(fresh.map(p => PhotoDB.set("d:" + p.id, p.blob))).then(() => {
+        raw.set("photoQueue", (raw.get("photoQueue", []) || []).concat(fresh.map(p => p.id)));
+        uploadPhotos(); render(true);
+      }).catch(() => toast("Non riesco a salvare le foto sul telefono"));
+    }
+    if (old) diary = diary.map(v => (v.id === x.id ? x : v)); else diary.push(x);
+    S.set("diary", diary);
+    return true;
+  }
+  function dropPhoto(pid) {
+    PhotoDB.del("d:" + pid).catch(() => { /* già tolta */ });
+    const cfg = raw.get("sync", null);
+    raw.set("photoQueue", (raw.get("photoQueue", []) || []).filter(x => x !== pid));
+    if (cfg) getCodec(cfg).then(c => postSync(cfg.url, { action: "blob-del", key: c.space, id: pid })).catch(() => { /* resta sul servizio */ });
+  }
+  function deleteLog(id) {
+    const x = diary.find(v => v.id === id);
+    if (!x) return;
+    (x.photos || []).forEach(dropPhoto);
+    diary = diary.map(v => (v.id === id ? { id, del: true, date: x.date, type: x.type } : v));
+    S.set("diary", diary);
+  }
+  function openPhoto(pid, eid) {
+    const x = diary.find(v => v.id === eid);
+    openSheet(`<div class="ph-big">${phImg(pid)}</div>
+      ${x ? `<p><b>${esc(x.t || "")}</b></p><p class="small muted">${fmt(parseISO(x.date), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}${x.time ? " · " + esc(x.time) : ""}${ageAt(x.date) ? " · " + name() + " aveva " + ageText(ageAt(x.date)) : ""}</p>` : ""}
+      <div class="btn-row"><button class="btn ghost" data-act="photo-save" data-id="${esc(pid)}">⬇️ Salva</button>
+        ${x ? `<button class="btn ghost" data-act="log-edit" data-id="${esc(eid)}">✏️ Modifica</button>` : ""}
+        <button class="btn ghost" data-act="close">Chiudi</button></div>`);
+    hydrateDiaryPhotos(sheet);
+  }
+
+  /* Foto del diario: sul telefono in IndexedDB; con la condivisione attiva vengono cifrate e salvate sul servizio,
+     così le vedono anche gli altri telefoni della famiglia */
+  const phUrls = new Map(), phTried = new Set();
+  async function photoUrl(pid) {
+    if (phUrls.has(pid)) return phUrls.get(pid);
+    let blob = await PhotoDB.get("d:" + pid).catch(() => null);
+    if (!blob) blob = await fetchSharedPhoto(pid);
+    if (!blob) return null;
+    const u = URL.createObjectURL(blob); phUrls.set(pid, u); return u;
+  }
+  function hydrateDiaryPhotos(root) {
+    (root || app).querySelectorAll("img[data-ph]").forEach(img => {
+      photoUrl(img.dataset.ph).then(u => { if (u) img.src = u; else img.classList.add("missing"); }).catch(() => img.classList.add("missing"));
+    });
+  }
+  var photoBusy = false;
+  async function uploadPhotos() {
+    const cfg = raw.get("sync", null), q = raw.get("photoQueue", []) || [];
+    // servizio senza foto: si riprova ogni 6 ore (o subito con «Sincronizza ora»), magari nel frattempo è stato aggiornato
+    if (!cfg || !q.length || photoBusy || Date.now() - (Number(raw.get("photoShare", 0)) || 0) < 6 * 3600e3) return;
+    photoBusy = true;
+    try {
+      const codec = await getCodec(cfg);
+      for (const pid of q) {
+        const blob = await PhotoDB.get("d:" + pid).catch(() => null);
+        if (blob) {
+          const data = await codec.seal(new Uint8Array(await blob.arrayBuffer()));
+          const res = await postSync(cfg.url, { action: "blob-put", key: codec.space, id: pid, data });
+          // un servizio più vecchio risponde come a una sincronizzazione: le foto restano su questo telefono
+          if (!res || !res.ok) { if (res && Array.isArray(res.rec)) { raw.set("photoShare", Date.now()); if (/diario/.test(location.hash) && sheet.hidden) render(true); } break; }
+        }
+        raw.set("photoQueue", (raw.get("photoQueue", []) || []).filter(v => v !== pid));
+      }
+    } catch (e) { /* si riprova alla prossima sincronizzazione */ } finally { photoBusy = false; }
+  }
+  async function fetchSharedPhoto(pid) {
+    const cfg = raw.get("sync", null);
+    if (!cfg || phTried.has(pid)) return null;
+    phTried.add(pid);
+    try {
+      const codec = await getCodec(cfg), res = await postSync(cfg.url, { action: "blob-get", key: codec.space, id: pid });
+      if (!res || !res.data) return null;
+      const blob = new Blob([await codec.open(res.data)], { type: "image/jpeg" });
+      await PhotoDB.set("d:" + pid, blob).catch(() => { /* spazio pieno */ });
+      return blob;
+    } catch (e) { return null; }
   }
 
   /* ---------------- Giochi ---------------- */
@@ -1383,7 +1774,7 @@
       <div class="section-title"><h2>Tutti gli allergeni</h2></div>
       ${p.st.map(row).join("")}
       <div class="card small">
-        <b>Come funziona:</b> l'ordine è un suggerimento, potete cambiarlo con il pediatra. Il nuovo allergene si offre di mattina o a pranzo, in un giorno in cui il bimbo sta bene. Le date arrivano dal <a href="#/diario">Diario dei cibi</a>.
+        <b>Come funziona:</b> l'ordine è un suggerimento, potete cambiarlo con il pediatra. Il nuovo allergene si offre di mattina o a pranzo, in un giorno in cui il bimbo sta bene. Le date arrivano dai <a href="#/cibi">Cibi provati</a> e dal <a href="#/diario">Diario</a>.
         <a href="#/sezione/allergeni">Guida completa ›</a>
       </div>`;
   }
@@ -1484,14 +1875,16 @@
       <p class="disclaimer">I percentili descrivono, non giudicano: conta soprattutto che la crescita segua la sua curva nel tempo. Le valutazioni le fa il pediatra.</p>`;
   }
 
-  function openAddGrowth() {
-    openSheet(`<h2>📏 Nuova misurazione</h2>
-      <form id="growthForm">
-        <label class="field"><span>Data</span><input type="date" name="date" value="${iso(today0())}" max="${iso(today0())}" min="${esc(settings.birth)}" required></label>
-        <label class="field"><span>Peso (kg)</span><input type="text" inputmode="decimal" name="w" placeholder="Es. 7,45"></label>
-        <label class="field"><span>Lunghezza (cm)</span><input type="text" inputmode="decimal" name="l" placeholder="Es. 66,5"></label>
-        <label class="field"><span>Circonferenza della testa (cm)</span><input type="text" inputmode="decimal" name="h" placeholder="Es. 43"></label>
-        <div class="btn-row"><button class="btn" type="submit" style="flex:1">Salva</button><button class="btn ghost" type="button" data-act="close">Annulla</button></div>
+  function openAddGrowth(date, id) {
+    const g = (id && growth.find(x => x.id === id)) || {}, num = v => (v ? String(v).replace(".", ",") : "");
+    openSheet(`<h2>📏 ${id ? "Modifica la misurazione" : "Nuova misurazione"}</h2>
+      <form id="growthForm" data-id="${esc(id || "")}">
+        <label class="field"><span>Data</span><input type="date" name="date" value="${esc(g.date || date || iso(today0()))}" max="${iso(today0())}" min="${esc(settings.birth)}" required></label>
+        <label class="field"><span>Peso (kg)</span><input type="text" inputmode="decimal" name="w" placeholder="Es. 7,45" value="${num(g.w)}"></label>
+        <label class="field"><span>Lunghezza (cm)</span><input type="text" inputmode="decimal" name="l" placeholder="Es. 66,5" value="${num(g.l)}"></label>
+        <label class="field"><span>Circonferenza della testa (cm)</span><input type="text" inputmode="decimal" name="h" placeholder="Es. 43" value="${num(g.h)}"></label>
+        <p class="small muted">Le misure finiscono anche nelle curve di crescita, in Salute.</p>
+        <div class="btn-row"><button class="btn" type="submit" style="flex:1">Salva</button>${id ? `<button class="btn danger" type="button" data-act="g-del" data-id="${esc(id)}">Elimina</button>` : ""}<button class="btn ghost" type="button" data-act="close">Annulla</button></div>
       </form>`);
   }
 
@@ -1794,8 +2187,8 @@
   // il servizio Google (sync/piccoli-passi-sync.gs) tiene, per ogni record, la modifica più recente.
   // "var" perché queste variabili servono già durante l'avvio (prima che il codice arrivi qui)
   var SYNC_KID_MAPS = ["foods", "ready", "done", "health"];
-  var SYNC_KID_LISTS = ["growth", "appts", "questions"];
-  var SYNC_LOCAL_ONLY = ["sync", "activeKid", "evKm", "theme", "installDismissed", "feed"];
+  var SYNC_KID_LISTS = ["growth", "appts", "questions", "diary"];
+  var SYNC_LOCAL_ONLY = ["sync", "activeKid", "evKm", "theme", "installDismissed", "feed", "cookMode", "photoQueue", "photoShare"];
   var syncing = false, syncTimer = null, applyingRemote = false, pendingRender = false;
   const hashStr = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return (h >>> 0).toString(36) + str.length.toString(36); };
   function onLocalChange(k) {
@@ -1867,7 +2260,7 @@
   let codecCache = null;
   async function getCodec(cfg) {
     // Spazi creati prima della cifratura (codici PP1-…): dati in chiaro, come prima
-    if (cfg.v !== 2) return { space: cfg.key, keyFor: async n => n, nameFor: k => k, encode: async (n, v) => v, decode: async r => ({ n: r.k, v: r.v }) };
+    if (cfg.v !== 2) return { space: cfg.key, keyFor: async n => n, nameFor: k => k, encode: async (n, v) => v, decode: async r => ({ n: r.k, v: r.v }), seal: async b => bytesToB64u(b), open: async s2 => b64uToBytes(s2) };
     if (codecCache && codecCache.secret === cfg.secret) return codecCache.codec;
     const te = new TextEncoder(), sha = async str => new Uint8Array(await crypto.subtle.digest("SHA-256", te.encode(str)));
     // Dal codice segreto si ricavano tre chiavi diverse: identificativo dello spazio, cifratura (AES-GCM) e nomi (HMAC)
@@ -1884,6 +2277,16 @@
         return keys.get(n);
       },
       nameFor: k => names.get(k),
+      async seal(bytes) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, bytes));
+        const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12);
+        return bytesToB64u(out);
+      },
+      async open(str) {
+        const b = b64uToBytes(str);
+        return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b.subarray(0, 12) }, aes, b.subarray(12)));
+      },
       async encode(n, v) {
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, te.encode(JSON.stringify({ n, v }))));
@@ -1952,10 +2355,13 @@
         return false;
       }
       let changed = false;
-      const onServer = new Set();
+      const onServer = new Set(), keepDiary = new Set();
       for (const r of data.rec) {
         const nm = codec.nameFor(r.k);
         if (nm) onServer.add(nm);
+        // le voci del diario non si cancellano mai davvero (hanno del: true): un «cancellato» arriva da una versione
+        // vecchia dell'app che non le conosce, quindi si tengono e si rimandano
+        if (r.d && nm && /^k:[^:]+:diary:/.test(nm) && nm in cur) { keepDiary.add(nm); continue; }
         if (r.d) { if (nm && nm in cur) { delete cur[nm]; changed = true; } continue; }
         const o = await codec.decode(r);
         if (o) onServer.add(o.n);
@@ -1970,13 +2376,15 @@
       Object.keys(cur).forEach(n => { newMeta[n] = hashStr(JSON.stringify(cur[n])); });
       dirty.forEach(n => { if (n in startJson) newMeta[n] = hashStr(startJson[n]); else delete newMeta[n]; });
       // Dopo un riallineamento: ciò che il servizio non ha più si rimanda
-      let resend = false;
+      let resend = keepDiary.size > 0;
+      keepDiary.forEach(n => { delete newMeta[n]; });
       if (cfg.full) Object.keys(cur).forEach(n => { if (!onServer.has(n)) { delete newMeta[n]; resend = true; } });
       const saved = Object.assign({}, raw.get("sync", cfg), { seq: data.seq, meta: newMeta, last: Date.now(), err: "" });
       if (data.id) saved.epoch = data.id;
       delete saved.full; delete saved.triedCentral;
       raw.set("sync", saved);
       syncFails = 0;
+      setTimeout(uploadPhotos, 200);
       if (dirty.length || resend) syncTimer = setTimeout(() => syncNow(false), 1500);
       if (changed || manual || /impostazioni/.test(location.hash)) { if (sheet.hidden) render(true); else pendingRender = true; }
       if (manual) toast(changed ? "Dati aggiornati dalla famiglia ✅" : "Tutto sincronizzato ✅");
@@ -2064,7 +2472,7 @@
         ${c.v !== 2 ? `<button class="btn block" data-act="sync-encrypt" style="margin-top:10px">🔒 Passa alla cifratura</button>` : ""}
         <button class="btn ghost block" data-act="sync-newfamily" style="margin-top:10px">🏠 Crea uno spazio per un'altra famiglia</button>
         ${own ? `<button class="btn ghost block" data-act="sync-update" style="margin-top:8px">🛠️ Aggiorna il servizio Google</button>` : ""}
-        <p class="small muted" style="margin:10px 0 0">Le foto dei piatti restano solo sul telefono che le ha scattate. Il codice di invito apre tutti i dati della famiglia: mandalo solo a persone di fiducia.</p>
+        <p class="small muted" style="margin:10px 0 0">Le foto del diario vengono cifrate e condivise con la famiglia; quelle dei piatti restano sul telefono che le ha scattate. Il codice di invito apre tutti i dati della famiglia: mandalo solo a persone di fiducia.</p>
         <button class="btn danger small" data-act="sync-leave" style="margin-top:8px">Scollega questo telefono</button>
       </div>`;
   }
@@ -2311,7 +2719,7 @@
       ${syncCard()}
       <div class="card">
         <h2>💾 Backup</h2>
-        <p class="small">Salva una copia di tutti i dati in un file, da conservare o da importare su un telefono nuovo. Le foto dei piatti non sono incluse.</p>
+        <p class="small">Salva una copia di tutti i dati in un file, da conservare o da importare su un telefono nuovo. Le foto (del diario e dei piatti) non sono incluse: con la condivisione attiva quelle del diario restano comunque sul servizio, cifrate.</p>
         <div class="btn-row">
           <button class="btn ghost" data-act="export">⬇️ Esporta</button>
           <label class="btn ghost" style="cursor:pointer">⬆️ Importa<input type="file" accept="application/json,.json" data-act="import" hidden></label>
@@ -2321,7 +2729,7 @@
         <h2>🔐 Dove sono i tuoi dati</h2>
         <ul class="small">
           <li><b>Sul telefono:</b> profili, diario, crescita, agenda, preferiti e foto restano in questa app.</li>
-          <li><b>Condivisione (se attiva):</b> i dati partono già <b>cifrati</b> con il codice di famiglia; il servizio li conserva senza poterli leggere. Le foto non vengono mai inviate.</li>
+          <li><b>Condivisione (se attiva):</b> i dati partono già <b>cifrati</b> con il codice di famiglia; il servizio li conserva senza poterli leggere. Lo stesso vale per le foto del diario, salvate cifrate in una cartella del Drive di chi gestisce il servizio. Le foto dei piatti non vengono inviate.</li>
           <li><b>Comune:</b> il nome viene cercato su OpenStreetMap e il sito del Comune o dell'ASL su Wikidata. Non viene inviato nient'altro.</li>
           <li><b>Notizie sugli eventi:</b> per cercarle su Google News si invia solo il nome del comune, al servizio dell'app oppure, se non c'è, ai lettori pubblici di notizie rss2json.com e allorigins.win.</li>
           <li><b>Video:</b> YouTube riceve la richiesta solo quando premi play.</li>
@@ -2376,8 +2784,32 @@
       case "home-open": openHomePicker(); break;
       case "home-pick": { const hh = homeResults[Number(t.dataset.i)]; if (hh) setHome(hh); break; }
       case "sync-join": openSyncJoin(""); break;
-      case "sync-now": syncNow(true); break;
+      case "sync-now": raw.del("photoShare"); syncNow(true); break;
       case "sync-check": openSyncCheck(); break;
+      case "cal-day": ui.dSel = t.dataset.d; ui.dMon = t.dataset.d.slice(0, 7) + "-01"; ui.dTab = "cal"; if (!/diario/.test(location.hash)) location.hash = "#/diario"; else render(true); break;
+      case "cal-mon": { const m0 = parseISO(ui.dMon || (ui.dSel || iso(today0())).slice(0, 7) + "-01"); ui.dMon = iso(new Date(m0.getFullYear(), m0.getMonth() + Number(t.dataset.d), 1)); render(true); break; }
+      case "log-add": openLog(t.dataset.type, t.dataset.d || iso(today0())); break;
+      case "log-edit": openLog(null, null, t.dataset.id); break;
+      case "g-edit": openAddGrowth(null, t.dataset.id); break;
+      case "log-del": if (confirm("Eliminare questa voce del diario?")) { deleteLog(t.dataset.id); closeSheet(); render(true); } break;
+      case "lg-pick": { const box = t.closest(".lg-pick"), inp = box.nextElementSibling, on = t.classList.contains("on") && box.dataset.name !== "kind" && box.dataset.name !== "r";
+        box.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === t && !on)); inp.value = on ? "" : t.dataset.v; break; }
+      case "lg-food": { t.classList.toggle("on"); const inp = sheet.querySelector("input[name=foods]");
+        inp.value = [...sheet.querySelectorAll("#lgFoods .chip.on")].map(b => b.dataset.id).join(","); break; }
+      case "lg-fill": { const inp = sheet.querySelector("input[name=t]"); if (inp) inp.value = t.dataset.v; break; }
+      case "lg-unphoto": { const sp = t.closest("span"); if (sp.dataset.new) pendingPhotos = pendingPhotos.filter(p => p.id !== sp.dataset.new); sp.remove(); break; }
+      case "sleep-start": {
+        const d = iso(today0());
+        if (!sleeping()) { diary.push({ id: "l" + Date.now().toString(36), date: d, type: "sonno", time: nowHM(), end: null, kind: toMin(nowHM()) > 19 * 60 || toMin(nowHM()) < 6 * 60 ? "notte" : "nanna" }); S.set("diary", diary); toast("Buona nanna 😴"); }
+        render(true); break;
+      }
+      case "sleep-stop": {
+        const x = diary.find(v => v.id === t.dataset.id);
+        if (x) { x.end = nowHM(); x.endDate = iso(today0()); S.set("diary", diary); toast("Nanna di " + durTxt(sleepMin(x)) + " ✅"); }
+        render(true); break;
+      }
+      case "photo-open": openPhoto(t.dataset.id, t.dataset.e); break;
+      case "photo-save": { const b = await PhotoDB.get("d:" + t.dataset.id).catch(() => null); if (b) download("piccoli-passi-" + t.dataset.id + ".jpg", b, "image/jpeg"); break; }
       case "go-growth": ui.healthTab = "crescita"; location.hash = "#/salute"; break;
       case "sync-invite": openInvite(); break;
       case "sync-newfamily": openNewFamily(); break;
@@ -2409,7 +2841,7 @@
       case "g-pt": toast(t.dataset.label); break;
       case "g-add": openAddGrowth(); break;
       case "g-del":
-        if (confirm("Eliminare questa misurazione?")) { growth = growth.filter(g => g.id !== t.dataset.id); S.set("growth", growth); render(true); }
+        if (confirm("Eliminare questa misurazione?")) { growth = growth.filter(g => g.id !== t.dataset.id); S.set("growth", growth); closeSheet(); render(true); }
         break;
       case "ap-add": openAddAppt(); break;
       case "ap-del":
@@ -2516,6 +2948,16 @@
   }, true);
 
   document.addEventListener("change", e => {
+    if (e.target.dataset && e.target.dataset.act === "lg-photo" && e.target.files.length) {
+      const files = [...e.target.files].slice(0, 10), prev = sheet.querySelector("#lgPrev");
+      e.target.value = "";
+      files.forEach(file => resizeImage(file, 1440).then(blob => {
+        const pid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10), u = URL.createObjectURL(blob);
+        pendingPhotos.push({ id: pid, blob });
+        if (prev) prev.insertAdjacentHTML("beforeend", `<span data-new="${pid}"><img src="${u}" alt=""><button type="button" data-act="lg-unphoto" aria-label="Togli">✕</button></span>`);
+      }).catch(() => toast("Non riesco a leggere questa foto")));
+      return;
+    }
     if (e.target.dataset && e.target.dataset.act === "photo" && e.target.files[0]) {
       const key = e.target.dataset.key, file = e.target.files[0];
       e.target.value = "";
@@ -2611,10 +3053,12 @@
       render(true);
     } else if (f.id === "growthForm") {
       const n = k => { const v = parseFloat(String(fd.get(k) || "").replace(",", ".")); return v > 0 ? v : null; };
-      const g = { id: "g" + Date.now(), date: fd.get("date"), w: n("w"), l: n("l"), h: n("h") };
+      const g = { id: f.dataset.id || "g" + Date.now(), date: fd.get("date"), w: n("w"), l: n("l"), h: n("h") };
       if (g.w && g.w > 30) g.w = g.w / 1000; // scritto in grammi
       if (!g.w && !g.l && !g.h) { toast("Inserisci almeno una misura"); return; }
-      growth.push(g); S.set("growth", growth); closeSheet(); toast("Misurazione salvata 📏"); render(true);
+      growth = growth.filter(x => x.id !== g.id).concat(g); S.set("growth", growth); closeSheet(); toast("Misurazione salvata 📏"); render(true);
+    } else if (f.id === "logForm") {
+      if (saveLog(f, fd)) { closeSheet(); toast("Segnato nel diario ✅"); render(true); }
     } else if (f.id === "apptForm") {
       appts.push({ id: "ap" + Date.now(), type: fd.get("type"), t: String(fd.get("t") || "").trim(), date: fd.get("date"),
         time: String(fd.get("time") || ""), place: String(fd.get("place") || "").trim(), note: String(fd.get("note") || "").trim() });
