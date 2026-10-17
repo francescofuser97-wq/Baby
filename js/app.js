@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "5.0.0";
+  const VERSION = "5.1.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -16,8 +16,8 @@
     del(k) { try { localStorage.removeItem("pp." + k); } catch (e) { /* ignore */ } }
   };
   // Dati di ogni figlio (salvati come "k.<id>.<chiave>") e dati in comune per la famiglia
-  const KID_KEYS = ["foods", "ready", "done", "growth", "health", "appts", "questions", "diary"];
-  const SHARED_KEYS = ["favs", "myEvents", "contacts", "evKm", "theme", "videos", "home"];
+  const KID_KEYS = ["foods", "ready", "done", "growth", "health", "appts", "questions", "diary", "plan", "ms", "rem", "remDone"];
+  const SHARED_KEYS = ["favs", "myEvents", "contacts", "evKm", "theme", "videos", "home", "shop"];
   let kids = raw.get("kids", null);
   let activeKid = raw.get("activeKid", null);
   if (!kids) {
@@ -53,12 +53,12 @@
       raw.set(KID_KEYS.includes(k) ? "k." + activeKid + "." + k : k, v);
     }
   };
-  let settings, foods, ready, done, growth, health, appts, questions, diary;
+  let settings, foods, ready, done, growth, health, appts, questions, diary, plan, ms, rem, remDone;
   function loadKid() {
     settings = S.get("settings", null);
     foods = S.get("foods", {}); ready = S.get("ready", {}); done = S.get("done", {});
     growth = S.get("growth", []); health = S.get("health", {}); appts = S.get("appts", []); questions = S.get("questions", []);
-    diary = S.get("diary", []);
+    diary = S.get("diary", []); plan = S.get("plan", {}); ms = S.get("ms", {}); rem = S.get("rem", []); remDone = S.get("remDone", {});
   }
   loadKid();
   let favs = S.get("favs", {});
@@ -68,6 +68,7 @@
   let contacts = S.get("contacts", {});
   let videos = S.get("videos", {});
   let home = S.get("home", null);
+  let shop = S.get("shop", []);
   function switchKid(id) {
     activeKid = id; raw.set("activeKid", id); loadKid();
   }
@@ -181,12 +182,12 @@
   }
 
   /* ---------------- Router ---------------- */
-  const TITLES = { oggi: "Piccoli Passi", ricette: "Pappa", ricetta: "Ricetta", guida: "Pappa", sezione: "Guida", diario: "Diario", cibi: "Pappa", giochi: "Scopri", attivita: "Gioco", eventi: "Scopri", impostazioni: "Impostazioni", allergeni: "Pappa", salute: "Salute", emergenze: "Emergenze", mese: "Scopri" };
+  const TITLES = { oggi: "Piccoli Passi", ricette: "Pappa", ricetta: "Ricetta", guida: "Pappa", sezione: "Guida", diario: "Diario", cibi: "Pappa", settimana: "Pappa", spesa: "Pappa", giochi: "Scopri", attivita: "Gioco", eventi: "Scopri", impostazioni: "Impostazioni", allergeni: "Pappa", salute: "Salute", emergenze: "Emergenze", mese: "Scopri" };
   const PARENT = { ricetta: "#/ricette", sezione: "#/guida", attivita: "#/giochi", impostazioni: "#/oggi", emergenze: "#/salute" };
   // Cinque sezioni: Oggi, Diario, Pappa (ricette, guida, cibi, allergeni), Salute, Scopri (giochi, mese per mese, eventi)
-  const TAB_OF = { ricette: "pappa", ricetta: "pappa", guida: "pappa", sezione: "pappa", cibi: "pappa", allergeni: "pappa", giochi: "scopri", attivita: "scopri", mese: "scopri", eventi: "scopri", emergenze: "salute" };
+  const TAB_OF = { ricette: "pappa", ricetta: "pappa", guida: "pappa", sezione: "pappa", cibi: "pappa", allergeni: "pappa", settimana: "pappa", spesa: "pappa", giochi: "scopri", attivita: "scopri", mese: "scopri", eventi: "scopri", emergenze: "salute" };
   const HUBS = {
-    pappa: [["ricette", "🥣 Ricette"], ["guida", "📖 Guida"], ["cibi", "📒 Cibi provati"], ["allergeni", "⚠️ Allergeni"]],
+    pappa: [["ricette", "🥣 Ricette"], ["settimana", "🗓️ Settimana"], ["spesa", "🛒 Spesa"], ["guida", "📖 Guida"], ["cibi", "📒 Cibi provati"], ["allergeni", "⚠️ Allergeni"]],
     scopri: [["giochi", "🧸 Giochi"], ["mese", "📆 Mese per mese"], ["eventi", "📍 Eventi"]]
   };
   const hubNav = view => {
@@ -212,6 +213,8 @@
       case "sezione": return viewSection(r.id);
       case "diario": return viewDiary();
       case "cibi": return viewFoods();
+      case "settimana": return viewWeek();
+      case "spesa": return viewShop();
       case "giochi": return viewPlay();
       case "attivita": return viewActivity(r.id);
       case "eventi": return viewEvents();
@@ -256,6 +259,7 @@
       chip.setAttribute("aria-label", "Profilo: " + n + ". Cambia figlio");
     }
     document.getElementById("topTitle").textContent = TITLES[r.view] || "Piccoli Passi";
+    updateNetChip();
     document.getElementById("btnBack").hidden = !PARENT[r.view] || !settings;
     document.getElementById("brand").querySelector("img").hidden = !!PARENT[r.view];
     if (keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
@@ -682,6 +686,7 @@
 
       ${sleepLiveCard()}
       ${todayDiaryCard()}
+      ${remTodayCard()}
       ${healthTodayCard()}
       ${allergenTodayCard()}
       ${readiness}
@@ -859,7 +864,7 @@
       <h1 class="rd-title">${esc(r.t)}</h1>
       <div class="rd-meta"><span>⏱ ${r.min} min</span><span>🥄 pappa</span><span>✋ a pezzi</span></div>
       ${r.al.length ? `<div class="rd-al">${allergenTags(r.al)}</div>` : ""}
-      <button class="btn block rd-cook" data-act="cook" data-id="${r.id}">👩‍🍳 Cucina passo passo</button>
+      <div class="btn-row rd-ctas"><button class="btn rd-cook" data-act="cook" data-id="${r.id}" style="flex:1">👩‍🍳 Cucina passo passo</button><button class="btn ghost rd-cook" data-act="plan-recipe" data-id="${r.id}" aria-label="Aggiungi alla settimana">🗓️</button></div>
       ${r.m > m && m >= 6 ? `<div class="note">Questa ricetta è pensata dai ${r.m} mesi: tienila per più avanti.</div>` : ""}
       ${bb ? `<h2 class="rd-h">Come la prepari</h2><div class="segmented rd-seg">${seg("cook-mode", "", "classica", "🍳 Pentola e forno", !useB)}${seg("cook-mode", "", "bimby", "Bimby®", useB)}</div>` : ""}
       <h2 class="rd-h">Ingredienti</h2>
@@ -1160,6 +1165,7 @@
     if (x.time) bits.push(x.type === "sonno" && x.end ? x.time + "–" + x.end : x.time);
     if (x.type === "pasto") { if (x.q) bits.push(({ poco: "ne ha mangiato poco", meta: "circa metà", tutto: "tutto" })[x.q]); if (x.r && REACT[x.r]) bits.push(REACT[x.r][0] + " " + REACT[x.r][1]); }
     if (x.note) bits.push(x.note);
+    if (x.by && raw.get("sync", null)) bits.push("✍️ " + x.by);
     return bits.join(" · ");
   }
   const phImg = id => `<img data-ph="${esc(id)}" alt="Foto" loading="lazy">`;
@@ -1353,6 +1359,7 @@
     const type = f.dataset.type, id = f.dataset.id, d = f.dataset.date, old = id ? diary.find(v => v.id === id) : null;
     const g = k => String(fd.get(k) || "").trim();
     const x = Object.assign({}, old || {}, { id: id || "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date: d, type, time: g("time") });
+    if (!old && me()) x.by = me();
     if (fd.has("note")) x.note = g("note");
     if (type === "pasto") {
       x.foods = g("foods").split(",").filter(Boolean); x.q = g("q"); x.r = g("r") || "si";
@@ -1389,6 +1396,8 @@
     }
     if (old) diary = diary.map(v => (v.id === x.id ? x : v)); else diary.push(x);
     S.set("diary", diary);
+    const mk = Object.keys(ms).find(k => ms[k] && ms[k].log === x.id);
+    if (mk && ms[mk].date !== x.date) { ms[mk] = Object.assign({}, ms[mk], { date: x.date }); S.set("ms", ms); }
     return true;
   }
   function dropPhoto(pid) {
@@ -1400,6 +1409,7 @@
   function deleteLog(id) {
     const x = diary.find(v => v.id === id);
     if (!x) return;
+    Object.keys(ms || {}).forEach(k => { if (ms[k] && ms[k].log === id) { ms[k] = null; S.set("ms", ms); } });
     (x.photos || []).forEach(dropPhoto);
     diary = diary.map(v => (v.id === id ? { id, del: true, date: x.date, type: x.type } : v));
     S.set("diary", diary);
@@ -1462,6 +1472,287 @@
     } catch (e) { return null; }
   }
 
+  /* ---------------- Promemoria ---------------- */
+  // Un'app web non può suonare a un orario preciso quando è chiusa: i promemoria si aggiungono al calendario del
+  // telefono (che avvisa sempre), compaiono in «Oggi» e, con l'app aperta, arriva anche una notifica.
+  const REM_PRESETS = [
+    { t: "Vitamina D", e: "☀️", kind: "daily", time: "09:00", note: "Le gocce consigliate dal pediatra" },
+    { t: "Farmaco", e: "💊", kind: "every", time: "08:00", every: 6, days: 3, note: "Dose indicata dal pediatra" },
+    { t: "Lavaggi nasali", e: "💧", kind: "every", time: "08:00", every: 8, days: 5 },
+    { t: "Prossimo allergene", e: "⚠️", kind: "once", time: "11:30" },
+    { t: "Altro", e: "🔔", kind: "once", time: "10:00" }
+  ];
+  const remAll = () => (rem || []).filter(r => r && !r.del);
+  const atTime = (d, t) => { const x = parseISO(d); x.setHours(0, toMin(t), 0, 0); return x; };
+  const hm = dt => String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0");
+  // Momenti in cui suona un promemoria in un giorno
+  function remTimes(r, d) {
+    if (r.kind === "once") return r.start === d ? [r.time] : [];
+    const end = r.days ? iso(addDays(parseISO(r.start), r.days - 1)) : null;
+    if (d < r.start || (end && d > end)) return [];
+    if (r.kind === "daily") return [r.time];
+    const out = [], first = atTime(r.start, r.time), stop = atTime(end || d, "23:59"), day0 = parseISO(d), day1 = addDays(day0, 1);
+    for (let x = new Date(first); x <= stop && out.length < 400; x = new Date(x.getTime() + r.every * 3600e3)) if (x >= day0 && x < day1) out.push(hm(x));
+    return out;
+  }
+  // Scadenze automatiche: bilanci e vaccinazioni non ancora segnati, appuntamenti in agenda
+  function autoReminders() {
+    const a = age(), t = today0(), out = [];
+    if (a) {
+      CHECKUPS.forEach(c => { if (!health["c:" + c.id]) out.push({ id: "c:" + c.id, e: "📋", t: c.t, date: addMonths(a.birth, c.m), sub: c.d }); });
+      VACCINES.forEach(v => { if (!health["v:" + v.id]) out.push({ id: "v:" + v.id, e: "💉", t: "Vaccinazioni: " + v.items.join(", "), date: addMonths(a.birth, v.m), sub: v.t }); });
+    }
+    appts.forEach(ap => out.push({ id: "a:" + ap.id, e: "📅", t: ap.t || APPT_TYPES[ap.type], date: parseISO(ap.date), time: ap.time, sub: ap.place || "", appt: true }));
+    return out.filter(x => daysBetween(t, x.date) >= -7 && daysBetween(t, x.date) <= 75).sort((x, y) => x.date - y.date);
+  }
+  const escI = s => String(s || "").replace(/\\/g, "\\\\").replace(/([,;])/g, "\\$1").replace(/\n/g, "\\n");
+  const icsDT = dt => dt.getFullYear() + String(dt.getMonth() + 1).padStart(2, "0") + String(dt.getDate()).padStart(2, "0") + "T" + String(dt.getHours()).padStart(2, "0") + String(dt.getMinutes()).padStart(2, "0") + "00";
+  // File .ics con avvisi: il calendario del telefono suona anche ad app chiusa
+  function icsFile(events) {
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Piccoli Passi//IT", "CALSCALE:GREGORIAN"];
+    events.forEach(ev => {
+      lines.push("BEGIN:VEVENT", "UID:" + ev.uid + "@piccolipassi", "DTSTAMP:" + stamp);
+      if (ev.allDay) lines.push("DTSTART;VALUE=DATE:" + iso(ev.start).replace(/-/g, ""), "DTEND;VALUE=DATE:" + iso(addDays(ev.start, 1)).replace(/-/g, ""));
+      else lines.push("DTSTART:" + icsDT(ev.start), "DTEND:" + icsDT(new Date(ev.start.getTime() + (ev.min || 15) * 60000)));
+      if (ev.rrule) lines.push("RRULE:" + ev.rrule);
+      lines.push("SUMMARY:" + escI(ev.t), "DESCRIPTION:" + escI(ev.desc || "Da Piccoli Passi"));
+      (ev.alarms || [0]).forEach(m => lines.push("BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + escI(ev.t), "TRIGGER:" + (m ? "-PT" + m + "M" : "PT0M"), "END:VALARM"));
+      lines.push("END:VEVENT");
+    });
+    lines.push("END:VCALENDAR");
+    return lines.join("\r\n");
+  }
+  function remIcs(r) {
+    const who = settings.name ? " – " + settings.name : "";
+    if (r.kind === "once") return icsFile([{ uid: r.id, start: atTime(r.start, r.time), t: r.t + who, desc: r.note, alarms: [0] }]);
+    if (r.kind === "daily") {
+      const until = r.days ? ";UNTIL=" + iso(addDays(parseISO(r.start), r.days - 1)).replace(/-/g, "") + "T235900" : "";
+      return icsFile([{ uid: r.id, start: atTime(r.start, r.time), rrule: "FREQ=DAILY" + until, t: r.t + who, desc: r.note, alarms: [0] }]);
+    }
+    const evs = [], end = atTime(iso(addDays(parseISO(r.start), (r.days || 1) - 1)), "23:59");
+    for (let x = atTime(r.start, r.time), i = 0; x <= end && i < 60; x = new Date(x.getTime() + r.every * 3600e3), i++) evs.push({ uid: r.id + "-" + i, start: x, t: r.t + who, desc: r.note, alarms: [0] });
+    return icsFile(evs);
+  }
+  function autoIcs(x) {
+    const at = x.time ? atTime(iso(x.date), x.time) : null;
+    return icsFile([at ? { uid: x.id.replace(/:/g, "-"), start: at, min: 30, t: x.t, desc: x.sub, alarms: [24 * 60, 60] }
+      : { uid: x.id.replace(/:/g, "-"), start: x.date, allDay: true, t: x.t + " (da prenotare)", desc: x.sub + "\nIndicativo: prenota con il pediatra o il centro vaccinale.", alarms: [7 * 24 * 60 - 9 * 60] }]);
+  }
+  const remKey = (r, d, t) => r.id + "|" + d + "|" + t;
+  // Promemoria di oggi (per «Oggi» e per le notifiche)
+  function todayRems() {
+    const d = iso(today0());
+    return remAll().flatMap(r => remTimes(r, d).map(t => ({ r, t, key: remKey(r, d, t), done: !!remDone[remKey(r, d, t)] }))).sort((a, b) => a.t.localeCompare(b.t));
+  }
+  function remTodayCard() {
+    const xs = todayRems(), autos = autoReminders().filter(x => daysBetween(today0(), x.date) === 0 && x.appt);
+    if (!xs.length && !autos.length) return "";
+    return `<div class="card"><div class="section-title" style="margin:0 0 6px"><h2>🔔 Promemoria di oggi</h2><a href="#/salute" data-act="set" data-k="healthTab" data-v="promemoria">Tutti ›</a></div>
+      ${autos.map(x => `<div class="food"><span class="st">${x.e}</span><span class="grow">${esc(x.t)}<br><span class="small muted">${esc(x.time || "")} ${esc(x.sub)}</span></span></div>`).join("")}
+      ${xs.map(x => `<button class="food" data-act="rem-done" data-key="${esc(x.key)}"><span class="st">${x.done ? "✅" : "⏰"}</span><span class="grow"><span style="${x.done ? "text-decoration:line-through;opacity:.6" : ""}">${esc(x.r.e || "🔔")} ${esc(x.r.t)}</span><br><span class="small muted">${x.t}${x.r.note ? " · " + esc(x.r.note) : ""}</span></span><span class="small muted">${x.done ? "fatto" : "segna"}</span></button>`).join("")}</div>`;
+  }
+  function viewReminders() {
+    const auto = autoReminders(), mine = remAll();
+    const kindTxt = r => (r.kind === "once" ? fmt(parseISO(r.start), { day: "numeric", month: "short" }) + " alle " + r.time
+      : r.kind === "daily" ? "Ogni giorno alle " + r.time + (r.days ? " per " + plural(r.days, "giorno", "giorni") : "")
+      : "Ogni " + r.every + " ore dalle " + r.time + " per " + plural(r.days || 1, "giorno", "giorni"));
+    const perm = "Notification" in window ? Notification.permission : "unsupported";
+    return `
+      <div class="card tint-blue small">🔔 <b>Come funzionano.</b> Tocca <b>📅 Aggiungi al calendario</b>: il calendario del telefono ti avvisa anche con l'app chiusa. I promemoria compaiono anche in «Oggi»${perm === "granted" ? " e, con l'app aperta, arriva una notifica" : ""}.
+        ${perm === "default" ? `<div style="margin-top:8px"><button class="btn ghost small" data-act="notif-on">Attiva le notifiche (con l'app aperta)</button></div>` : ""}</div>
+      <div class="section-title"><h2>I tuoi promemoria</h2></div>
+      ${mine.length ? mine.map(r => `<div class="card list-card"><div class="big-emoji">${esc(r.e || "🔔")}</div><div class="grow"><h3>${esc(r.t)}</h3><div class="meta">${esc(kindTxt(r))}${r.note ? " · " + esc(r.note) : ""}</div>
+        <div class="btn-row" style="margin-top:6px"><button class="btn ghost small" data-act="rem-ics" data-id="${esc(r.id)}">📅 Aggiungi al calendario</button><button class="btn ghost small" data-act="rem-edit" data-id="${esc(r.id)}">Modifica</button></div></div></div>`).join("")
+        : `<p class="small muted">Per esempio le gocce di vitamina D ogni mattina o un farmaco ogni 6 ore.</p>`}
+      <div class="chips">${REM_PRESETS.map((p, i) => `<button class="chip" data-act="rem-add" data-i="${i}">${p.e} ${p.t}</button>`).join("")}</div>
+      <div class="section-title"><h2>Scadenze in arrivo</h2></div>
+      ${auto.length ? auto.map(x => { const n = daysBetween(today0(), x.date); return `<div class="card list-card"><div class="big-emoji">${x.e}</div><div class="grow"><h3>${esc(x.t)}</h3>
+        <div class="meta">${n === 0 ? "Oggi" : n === 1 ? "Domani" : n < 0 ? "Da " + plural(-n, "giorno", "giorni") : "Tra " + plural(n, "giorno", "giorni")} · ${fmt(x.date, { day: "numeric", month: "long" })}${x.time ? " alle " + esc(x.time) : x.appt ? "" : " (indicativo)"}</div>
+        <div class="btn-row" style="margin-top:6px"><button class="btn ghost small" data-act="auto-ics" data-id="${esc(x.id)}">📅 Aggiungi al calendario</button></div></div></div>`; }).join("")
+        : `<p class="small muted">Nessuna scadenza nei prossimi due mesi.</p>`}
+      <p class="disclaimer">Le date di bilanci e vaccinazioni sono indicative: fa fede la chiamata del vostro centro vaccinale e del pediatra.</p>`;
+  }
+  function openRem(preset, id) {
+    const r = id ? rem.find(x => x.id === id) : Object.assign({ start: iso(today0()) }, REM_PRESETS[preset] || REM_PRESETS[4]);
+    if (!id && r.kind === "every") r.time = nowHM(); // la prima dose: adesso
+    if (!r) return;
+    const k = r.kind;
+    openSheet(`<h2>${esc(r.e || "🔔")} ${id ? "Modifica promemoria" : "Nuovo promemoria"}</h2>
+      <form id="remForm" data-id="${esc(id || "")}" data-e="${esc(r.e || "🔔")}">
+        <label class="field"><span>Che cosa</span><input type="text" name="t" required value="${esc(r.t)}"></label>
+        <div class="field"><span>Quando</span></div>
+        <div class="lg-pick" data-name="kind">${[["once", "Una volta"], ["daily", "Ogni giorno"], ["every", "Ogni tot ore"]].map(([v, l]) => `<button type="button" class="${k === v ? "on" : ""}" data-act="lg-pick" data-v="${v}">${l}</button>`).join("")}</div><input type="hidden" name="kind" value="${k}">
+        <div class="cols"><label class="field"><span>Dal giorno</span><input type="date" name="start" value="${esc(r.start)}" required></label>
+          <label class="field"><span>Alle</span><input type="time" name="time" value="${esc(r.time)}" required></label></div>
+        <div class="cols"><label class="field"><span>Ogni quante ore (solo «ogni tot ore»)</span><input type="number" name="every" min="1" max="24" value="${esc(r.every || 6)}"></label>
+          <label class="field"><span>Per quanti giorni (vuoto = sempre)</span><input type="number" name="days" min="1" max="365" value="${esc(r.days || "")}"></label></div>
+        <label class="field"><span>Nota</span><input type="text" name="note" value="${esc(r.note || "")}" placeholder="Es. 2,5 ml"></label>
+        <div class="btn-row"><button class="btn" type="submit" style="flex:1">Salva</button>${id ? `<button class="btn danger" type="button" data-act="rem-del" data-id="${esc(id)}">Elimina</button>` : ""}<button class="btn ghost" type="button" data-act="close">Annulla</button></div>
+      </form>`);
+  }
+  function saveRem(f, fd) {
+    const g = k => String(fd.get(k) || "").trim();
+    const r = { id: f.dataset.id || "r" + Date.now().toString(36), e: f.dataset.e, t: g("t"), kind: g("kind") || "once", start: g("start"), time: g("time"), every: Number(g("every")) || 6, days: Number(g("days")) || null, note: g("note") };
+    if (r.kind === "every" && !r.days) r.days = 3;
+    rem = rem.filter(x => x.id !== r.id).concat(r); S.set("rem", rem);
+    return r;
+  }
+  // Notifiche con l'app aperta (o appena tornati all'app): una sola volta per ogni promemoria
+  function checkNotify() {
+    if (!("Notification" in window) || Notification.permission !== "granted" || !settings) return;
+    const now = hm(new Date()), sent = raw.get("notified", {}) || {}, d = iso(today0());
+    todayRems().filter(x => !x.done && x.t <= now && toMin(now) - toMin(x.t) < 60 && !sent[x.key]).forEach(x => {
+      sent[x.key] = 1;
+      const opts = { body: x.t + (x.r.note ? " · " + x.r.note : ""), icon: "icons/icon-192.png", tag: x.key };
+      navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(reg => reg.showNotification((x.r.e || "🔔") + " " + x.r.t, opts)).catch(() => { /* niente */ }) : new Notification(x.r.t, opts);
+    });
+    Object.keys(sent).forEach(k => { if (!k.includes("|" + d + "|")) delete sent[k]; });
+    raw.set("notified", sent);
+  }
+  setInterval(checkNotify, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkNotify(); });
+
+  /* ---------------- Settimana delle pappe e lista della spesa ---------------- */
+  const MEALS = [["pranzo", "☀️ Pranzo"], ["cena", "🌙 Cena"]];
+  const mondayOf = d => addDays(d, -((d.getDay() + 6) % 7));
+  // Nel fine settimana si pianifica la settimana che arriva
+  const weekStart = () => (ui.wStart ? parseISO(ui.wStart) : addDays(mondayOf(today0()), [0, 6].includes(today0().getDay()) ? 7 : 0));
+  const recipeById = id => RECIPES.find(r => r.id === id);
+  function viewWeek() {
+    const start = weekStart(), days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+    const t = iso(today0()), end = addDays(start, 6);
+    const planned = days.reduce((n, d) => n + MEALS.filter(([k]) => (plan[iso(d)] || {})[k]).length, 0);
+    return `
+      <div class="cal-head">
+        <button class="rd-btn" data-act="week-move" data-d="-7" aria-label="Settimana prima">‹</button>
+        <h2>${fmt(start, { day: "numeric", month: "short" })} – ${fmt(end, { day: "numeric", month: "short" })}</h2>
+        <button class="rd-btn" data-act="week-move" data-d="7" aria-label="Settimana dopo">›</button>
+      </div>
+      <div class="btn-row" style="margin:0 0 12px"><button class="btn small" data-act="plan-auto">✨ Proponi la settimana</button>
+        ${planned ? `<button class="btn ghost small" data-act="shop-add-plan">🛒 Ingredienti nella spesa</button><button class="btn ghost small" data-act="plan-clear">Svuota</button>` : ""}</div>
+      ${days.map(d => {
+        const k = iso(d), p = plan[k] || {};
+        return `<div class="wk-day${k === t ? " today" : ""}${k < t ? " past" : ""}"><div class="wk-d"><b>${fmt(d, { weekday: "short" })}</b><small>${d.getDate()}</small></div>
+          <div class="wk-slots">${MEALS.map(([m, l]) => {
+            const r = p[m] && recipeById(p[m]);
+            return `<button class="wk-slot${r ? " full" : ""}" data-act="plan-slot" data-d="${k}" data-m="${m}">${r ? `<span class="wk-e">${r.e}</span><span class="grow"><small>${l}</small><b>${esc(r.t)}</b></span>` : `<span class="grow"><small>${l}</small><span class="muted">＋ Scegli</span></span>`}</button>`;
+          }).join("")}</div></div>`;
+      }).join("")}
+      <p class="small muted">Le proposte tengono conto dell'età di ${name()}, della stagione e dei cibi non ancora provati. La pappa la sceglie lui: segui il suo appetito.</p>`;
+  }
+  function openPlanSlot(d, m) {
+    const cur = (plan[d] || {})[m], age0 = ageM(), list = recipesForAge(age0).slice().sort((a, b) => (b.seasons.includes(season()) ? 1 : 0) - (a.seasons.includes(season()) ? 1 : 0));
+    openSheet(`<h2>${MEALS.find(x => x[0] === m)[1]} · ${fmt(parseISO(d), { weekday: "long", day: "numeric", month: "long" })}</h2>
+      <input class="search" type="search" id="wkQ" placeholder="Cerca una ricetta" autocomplete="off">
+      <div class="card" style="padding:0;overflow:hidden" id="wkList">
+        ${cur ? `<button class="food" data-act="plan-set" data-d="${d}" data-m="${m}" data-id=""><span class="st">✕</span><span class="grow">Lascia libero</span></button>` : ""}
+        ${list.map(r => `<button class="food" data-act="plan-set" data-d="${d}" data-m="${m}" data-id="${r.id}" data-n="${esc(normTxt(r.t + " " + r.ing.join(" ")))}"><span class="st">${r.e}</span><span class="grow">${esc(r.t)}<br><span class="small muted">dai ${r.m} mesi · ${r.min} min${r.al.length ? " · contiene allergeni" : ""}</span></span>${r.id === cur ? "✅" : ""}</button>`).join("")}
+      </div><button class="btn ghost block" data-act="close" style="margin-top:10px">Chiudi</button>`);
+    const q = sheet.querySelector("#wkQ");
+    q.addEventListener("input", () => { const v = normTxt(q.value); sheet.querySelectorAll("#wkList [data-n]").forEach(b => { b.hidden = v && !b.dataset.n.includes(v); }); });
+  }
+  function setPlan(d, m, id) {
+    plan[d] = Object.assign({ pranzo: null, cena: null }, plan[d] || {}, { [m]: id || null });
+    S.set("plan", plan);
+  }
+  // Proposta: ricette adatte e di stagione, senza ripetizioni ravvicinate; sotto i 7 mesi solo il pranzo
+  function autoPlan() {
+    const start = weekStart(), age0 = ageM(), s0 = season();
+    const pool = recipesForAge(age0).filter(r => ["pappa", "base", "famiglia", "pezzi"].includes(r.cat) && r.id !== "brodo-vegetale" && (!r.seasons.length || r.seasons.includes(s0)));
+    if (!pool.length) return 0;
+    const newFirst = pool.slice().sort((a, b) => (a.ing.some(i => FOODS.some(f => !foods[f.id] && normTxt(i).includes(normTxt(f.n)))) ? -1 : 0) - (b.ing.some(i => FOODS.some(f => !foods[f.id] && normTxt(i).includes(normTxt(f.n)))) ? -1 : 0));
+    let n = 0, i = (Math.floor(today0() / 864e5) * 3) % newFirst.length;
+    for (let k = 0; k < 7; k++) {
+      const d = iso(addDays(start, k));
+      if (d < iso(today0())) continue;
+      MEALS.forEach(([m]) => {
+        if (m === "cena" && age0 < 7) return;
+        if ((plan[d] || {})[m]) return;
+        setPlan(d, m, newFirst[i % newFirst.length].id); i++; n++;
+      });
+    }
+    return n;
+  }
+  // Lista della spesa condivisa con la famiglia
+  const shopAll = () => (shop || []).filter(x => x && !x.del);
+  function addShop(t, src) {
+    const key = normTxt(t);
+    if (!key || shopAll().some(x => !x.done && normTxt(x.t) === key)) return false;
+    shop.push({ id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t, src: src || "", done: false, by: me() || undefined });
+    return true;
+  }
+  function viewShop() {
+    const xs = shopAll(), todo = xs.filter(x => !x.done), got = xs.filter(x => x.done);
+    const row = x => `<div class="shop-row${x.done ? " done" : ""}"><button class="shop-chk" data-act="shop-toggle" data-id="${esc(x.id)}" aria-label="${x.done ? "Da riprendere" : "Preso"}">${x.done ? "✓" : ""}</button>
+      <span class="grow">${esc(x.t)}${x.src || (x.by && raw.get("sync", null)) ? `<small>${esc([x.src, x.by && raw.get("sync", null) ? "✍️ " + x.by : ""].filter(Boolean).join(" · "))}</small>` : ""}</span>
+      <button class="shop-del" data-act="shop-del" data-id="${esc(x.id)}" aria-label="Togli">✕</button></div>`;
+    return `
+      <form id="shopForm" class="shop-add"><input type="text" name="t" placeholder="Aggiungi alla spesa (es. pannolini taglia 4)" autocomplete="off" required><button class="btn" type="submit">＋</button></form>
+      <div class="btn-row" style="margin:0 0 12px"><button class="btn ghost small" data-act="shop-add-plan">🗓️ Ingredienti della settimana</button>
+        ${got.length ? `<button class="btn ghost small" data-act="shop-clear">Togli i presi (${got.length})</button>` : ""}</div>
+      ${todo.length ? `<div class="card" style="padding:4px 0">${todo.map(row).join("")}</div>` : `<div class="empty"><b>🛒</b>La lista è vuota.${raw.get("sync", null) ? " È condivisa con la famiglia: quello che aggiungi lo vedono anche loro." : ""}</div>`}
+      ${got.length ? `<div class="section-title"><h2>Presi</h2></div><div class="card" style="padding:4px 0">${got.map(row).join("")}</div>` : ""}`;
+  }
+  function planIngredientsToShop() {
+    const start = weekStart();
+    let n = 0;
+    for (let k = 0; k < 7; k++) {
+      const p = plan[iso(addDays(start, k))] || {};
+      MEALS.forEach(([m]) => {
+        const r = p[m] && recipeById(p[m]);
+        if (r) r.ing.filter(i => !/^(niente|acqua|1 litro d'acqua)/i.test(i)).forEach(i => { if (addShop(i.replace(/\s*\(.*\)\s*$/, ""), r.t)) n++; });
+      });
+    }
+    S.set("shop", shop);
+    return n;
+  }
+
+  /* ---------------- Primo avvio: le sezioni in quattro schermate ---------------- */
+  const TOUR = [
+    { e: "🏠", t: "Oggi", d: "Ogni giorno: l'età e il mese che sta vivendo, il diario della giornata a portata di tocco, appuntamenti, promemoria e un consiglio, una ricetta e un gioco adatti a lui." },
+    { e: "📅", t: "Diario", d: "Un calendario dove segnare pappe, poppate, nanne, pannolini, peso, febbre, prime volte e foto. In «Ricordi» trovi tutte le foto mese per mese, in «Andamento» sonno e poppate delle ultime settimane." },
+    { e: "🥣", t: "Pappa", d: "Ricette per lo svezzamento (anche con il Bimby), la settimana delle pappe con la lista della spesa, la guida, i cibi provati e il percorso degli allergeni." },
+    { e: "🩺", t: "Salute e Scopri", d: "Agenda, promemoria, curve di crescita e guide pratiche; poi giochi, tappe dello sviluppo, mese per mese ed eventi vicino a casa. Dal 🆘 in alto, sempre, le emergenze." },
+    { e: "👨‍👩‍👧", t: "Con la famiglia", d: "Da ⚙️ Impostazioni puoi condividere tutto con il partner (o in sola lettura con i nonni): i dati partono cifrati e restano solo vostri." }
+  ];
+  function openTour(i) {
+    const x = TOUR[i], last = i === TOUR.length - 1;
+    openSheet(`<div class="tour"><div class="tour-e">${x.e}</div><h2>${esc(x.t)}</h2><p>${esc(x.d)}</p>
+      <div class="r-dots">${TOUR.map((_, k) => `<i class="${k === i ? "on" : ""}"></i>`).join("")}</div>
+      <div class="btn-row">${i ? `<button class="btn ghost" data-act="tour" data-i="${i - 1}">‹ Indietro</button>` : `<button class="btn ghost" data-act="tour-end">Salta</button>`}
+        <button class="btn" style="flex:1" data-act="${last ? "tour-end" : "tour"}" data-i="${i + 1}">${last ? "Iniziamo 🌱" : "Avanti ›"}</button></div></div>`);
+  }
+
+  /* ---------------- Tappe dello sviluppo spuntabili ---------------- */
+  // Segnali per cui è bene parlarne con il pediatra (indicazioni generali, per fascia di età delle tappe)
+  const WATCH_FLAGS = [
+    ["Non segue con lo sguardo le persone o gli oggetti che si muovono", "Non sorride alle persone", "Non regge la testa quando sta a pancia in giù", "Non si gira verso i suoni o non si spaventa per un rumore forte"],
+    ["Verso i 9 mesi non sta seduto, nemmeno con un appoggio", "Non risponde quando lo si chiama per nome", "Non fa versi o lallazioni", "Non mostra interesse per giochi e persone"],
+    ["A 12 mesi non si sposta in nessun modo (né gattona né striscia)", "Non sta in piedi con un appoggio", "Non indica e non fa «ciao» con la mano", "Non dice sillabe come «ma-ma» o «pa-pa»"],
+    ["A 18 mesi non cammina", "Non dice almeno qualche parola", "Non indica per mostrarvi qualcosa", "Non imita i gesti degli adulti"],
+    ["A 24 mesi non mette insieme due parole", "Non sa a cosa servono oggetti comuni (spazzola, cucchiaio, telefono)", "Non segue richieste semplici", "Non imita azioni o parole"]
+  ];
+  const msKey = t => "m" + hashStr(t);
+  const msOf = t => { const v = ms[msKey(t)]; return v && v.date ? v : null; };
+  function toggleMilestone(k) {
+    const item = MILESTONES.flatMap(x => x.items).find(i => msKey(i) === k);
+    if (!item) return;
+    const cur = ms[k];
+    if (cur && cur.date) {
+      if (!confirm("Togliere la spunta? Sparisce anche dal diario.")) return;
+      if (cur.log) deleteLog(cur.log);
+      ms[k] = null;
+      toast("Spunta tolta");
+    } else {
+      const d = iso(today0()), id = "l" + Date.now().toString(36);
+      diary.push({ id, date: d, type: "traguardo", time: nowHM(), t: item, by: me() || undefined }); S.set("diary", diary);
+      ms[k] = { date: d, log: id };
+      toast("Bravissimo! ⭐ Segnato nel diario (puoi cambiare la data da lì)");
+    }
+    S.set("ms", ms); render(true);
+  }
+
   /* ---------------- Giochi ---------------- */
   function activityCard(a) {
     const ar = AREAS[a.area];
@@ -1498,9 +1789,14 @@
       const cur = MILESTONES.find(x => m >= x.min && m < x.max) || MILESTONES[m < 4 ? 0 : MILESTONES.length - 1];
       body = `<a class="card list-card tint-purple" href="#/mese"><div class="big-emoji">📆</div><div class="grow"><h3>Mese per mese</h3><div class="meta">Cosa aspettarsi e come affrontarlo: sonno, dentini, distacchi…</div></div><span class="muted">›</span></a>
         <p class="small muted">Sono indicazioni medie: ogni bambino ha i suoi tempi, e anche alcune settimane o mesi di differenza sono normali. Se qualcosa ti preoccupa, parlane con il pediatra.</p>
-        ${MILESTONES.map(x => `<div class="card ${x === cur ? "tint-green" : ""}">
-          <div class="card-kicker">${x === cur ? "📍 Questa età · " : ""}${x.t}</div>
-          <ul>${x.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>`).join("")}`;
+        <p class="small"><b>Tocca una tappa</b> quando ${name()} la raggiunge: finisce nel diario come «prima volta», con la data.</p>
+        ${MILESTONES.map((x, xi) => { const done = x.items.filter(i => msOf(i)).length; return `<div class="card ${x === cur ? "tint-green" : ""}">
+          <div class="card-kicker">${x === cur ? "📍 Questa età · " : ""}${x.t}<span style="margin-left:auto">${done}/${x.items.length}</span></div>
+          ${x.items.map(i => { const d = msOf(i); return `<button class="ms-row${d ? " on" : ""}" data-act="ms-toggle" data-k="${msKey(i)}"><span class="ms-chk">${d ? "✓" : ""}</span><span class="grow">${esc(i)}${d ? `<small>il ${fmt(parseISO(d.date), { day: "numeric", month: "long" })}</small>` : ""}</span></button>`; }).join("")}
+          ${WATCH_FLAGS[xi] ? `<details class="ms-watch"><summary>🩺 Quando parlarne con il pediatra</summary><ul>${WATCH_FLAGS[xi].map(w => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}
+          ${x === cur ? `<button class="link-btn small" data-act="set" data-k="playTab" data-v="giochi" style="margin-top:8px">🧸 Giochi per accompagnarlo in questa fase ›</button>` : ""}
+        </div>`; }).join("")}
+        <p class="small muted">Perdere capacità che aveva già è, a qualsiasi età, un motivo per sentire il pediatra.</p>`;
     } else if (ui.playTab === "libri") {
       body = viewBooks(m);
     } else {
@@ -1987,10 +2283,10 @@
 
   function viewHealth() {
     const seg = (v, label) => `<button class="${ui.healthTab === v ? "on" : ""}" data-act="set" data-k="healthTab" data-v="${v}">${segLabel(label)}</button>`;
-    const body = ui.healthTab === "crescita" ? viewGrowth() : ui.healthTab === "domande" ? viewQuestions() : ui.healthTab === "cura" ? viewCare() : viewAgenda() + aslCard();
+    const body = ui.healthTab === "crescita" ? viewGrowth() : ui.healthTab === "domande" ? viewQuestions() : ui.healthTab === "cura" ? viewCare() : ui.healthTab === "promemoria" ? viewReminders() : viewAgenda() + aslCard();
     return `<a class="card list-card" href="#/emergenze" style="background:var(--danger-soft);border-color:transparent">
         <div class="big-emoji">🆘</div><div class="grow"><h3>Emergenze</h3><div class="meta">Numeri utili, soffocamento, febbre, pronto soccorso</div></div><span class="muted">›</span></a>
-      <div class="segmented">${seg("agenda", "📅 Agenda")}${seg("crescita", "📈 Crescita")}${seg("domande", "❓ Domande")}${seg("cura", "🧴 Come si fa")}</div>${body}`;
+      <div class="segmented">${seg("agenda", "📅 Agenda")}${seg("promemoria", "🔔 Promemoria")}${seg("crescita", "📈 Crescita")}${seg("domande", "❓ Domande")}${seg("cura", "🧴 Come si fa")}</div>${body}`;
   }
 
   /* ---------------- Emergenze ---------------- */
@@ -2186,9 +2482,9 @@
   // Ogni dato diventa un «record» (chiave → valore). I telefoni si scambiano solo i record cambiati;
   // il servizio Google (sync/piccoli-passi-sync.gs) tiene, per ogni record, la modifica più recente.
   // "var" perché queste variabili servono già durante l'avvio (prima che il codice arrivi qui)
-  var SYNC_KID_MAPS = ["foods", "ready", "done", "health"];
-  var SYNC_KID_LISTS = ["growth", "appts", "questions", "diary"];
-  var SYNC_LOCAL_ONLY = ["sync", "activeKid", "evKm", "theme", "installDismissed", "feed", "cookMode", "photoQueue", "photoShare"];
+  var SYNC_KID_MAPS = ["foods", "ready", "done", "health", "plan", "ms", "remDone"];
+  var SYNC_KID_LISTS = ["growth", "appts", "questions", "diary", "rem"];
+  var SYNC_LOCAL_ONLY = ["sync", "activeKid", "evKm", "theme", "installDismissed", "feed", "cookMode", "photoQueue", "photoShare", "me", "onboarded", "lastBackup", "notified"];
   var syncing = false, syncTimer = null, applyingRemote = false, pendingRender = false;
   const hashStr = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return (h >>> 0).toString(36) + str.length.toString(36); };
   function onLocalChange(k) {
@@ -2204,13 +2500,14 @@
     });
     const fv = raw.get("favs", {}) || {}; Object.keys(fv).forEach(id => { f["favs:" + id] = fv[id]; });
     (raw.get("myEvents", []) || []).forEach(x => { if (x && x.id) f["myEvents:" + x.id] = x; });
+    (raw.get("shop", []) || []).forEach(x => { if (x && x.id) f["shop:" + x.id] = x; });
     const vd = raw.get("videos", {}) || {}; Object.keys(vd).forEach(id => { f["videos:" + id] = vd[id]; });
     const ct = raw.get("contacts", {}) || {}; if (Object.keys(ct).length) f.contacts = ct;
     const hm = raw.get("home", null); if (hm) f.home = hm;
     return f;
   }
   function unflatten(f) {
-    const ks = [], per = {}, fv = {}, ev = [], vd = {};
+    const ks = [], per = {}, fv = {}, ev = [], vd = {}, sh = [];
     let ct = {}, hm = null;
     Object.keys(f).forEach(key => {
       const v = f[key], p = key.split(":");
@@ -2223,6 +2520,7 @@
       }
       else if (p[0] === "favs") fv[p.slice(1).join(":")] = v;
       else if (p[0] === "myEvents") ev.push(v);
+      else if (p[0] === "shop") sh.push(v);
       else if (p[0] === "videos") vd[p.slice(1).join(":")] = v;
       else if (key === "contacts") ct = v;
       else if (key === "home") hm = v;
@@ -2239,9 +2537,10 @@
         SYNC_KID_LISTS.forEach(n => raw.set("k." + k.id + "." + n, (d[n] || []).sort((a, b) => String(a.id).localeCompare(String(b.id)))));
       });
       raw.set("favs", fv); raw.set("myEvents", ev); raw.set("videos", vd); raw.set("contacts", ct);
+      raw.set("shop", sh.sort((a, b) => String(a.id).localeCompare(String(b.id))));
       if (hm) raw.set("home", hm); else raw.del("home");
     } finally { applyingRemote = false; }
-    favs = fv; myEvents = ev; videos = vd; contacts = ct; home = hm;
+    favs = fv; myEvents = ev; videos = vd; contacts = ct; home = hm; shop = raw.get("shop", []);
     if (!kids.some(k => k.id === activeKid)) activeKid = kids.length ? kids[0].id : null;
     raw.set("activeKid", activeKid);
     loadKid();
@@ -2343,8 +2642,10 @@
       const codec = await getCodec(cfg);
       const cur = flatten(), meta = cfg.meta || {}, now = Date.now(), changes = [], startJson = {};
       Object.keys(cur).forEach(n => { startJson[n] = JSON.stringify(cur[n]); });
-      for (const n of Object.keys(cur)) if (meta[n] !== hashStr(startJson[n])) changes.push({ k: await codec.keyFor(n), v: await codec.encode(n, cur[n]), t: now });
-      for (const n of Object.keys(meta)) if (!(n in cur)) changes.push({ k: await codec.keyFor(n), v: null, t: now, d: true });
+      if (!cfg.ro) {
+        for (const n of Object.keys(cur)) if (meta[n] !== hashStr(startJson[n])) changes.push({ k: await codec.keyFor(n), v: await codec.encode(n, cur[n]), t: now });
+        for (const n of Object.keys(meta)) if (!(n in cur)) changes.push({ k: await codec.keyFor(n), v: null, t: now, d: true });
+      }
       const since = cfg.full ? 0 : cfg.seq || 0;
       const data = await postSync(cfg.url, { key: codec.space, since, changes });
       if (!data || data.error || !Array.isArray(data.rec)) throw new Error((data && data.error) || "risposta non valida dal servizio");
@@ -2361,7 +2662,7 @@
         if (nm) onServer.add(nm);
         // le voci del diario non si cancellano mai davvero (hanno del: true): un «cancellato» arriva da una versione
         // vecchia dell'app che non le conosce, quindi si tengono e si rimandano
-        if (r.d && nm && /^k:[^:]+:diary:/.test(nm) && nm in cur) { keepDiary.add(nm); continue; }
+        if (r.d && nm && /^(k:[^:]+:(diary|plan|ms|rem|remDone):|shop:)/.test(nm) && nm in cur) { keepDiary.add(nm); continue; }
         if (r.d) { if (nm && nm in cur) { delete cur[nm]; changed = true; } continue; }
         const o = await codec.decode(r);
         if (o) onServer.add(o.n);
@@ -2385,6 +2686,7 @@
       raw.set("sync", saved);
       syncFails = 0;
       setTimeout(uploadPhotos, 200);
+      if (!cfg.ro && Date.now() - (Number(raw.get("lastBackup", 0)) || 0) > 24 * 3600e3) setTimeout(autoBackup, 1500);
       if (dirty.length || resend) syncTimer = setTimeout(() => syncNow(false), 1500);
       if (changed || manual || /impostazioni/.test(location.hash)) { if (sheet.hidden) render(true); else pendingRender = true; }
       if (manual) toast(changed ? "Dati aggiornati dalla famiglia ✅" : "Tutto sincronizzato ✅");
@@ -2410,6 +2712,7 @@
       return false;
     } finally {
       syncing = false;
+      updateNetChip();
       if (syncAgain) { const m = syncAgain === "manual"; syncAgain = false; setTimeout(() => syncNow(m), 300); }
     }
   }
@@ -2419,7 +2722,7 @@
   function inviteCode(c) {
     c = c || raw.get("sync", null);
     if (!c) return "";
-    return c.v === 2 ? "PP2-" + b64u(JSON.stringify({ u: c.url, s: c.secret })) : "PP1-" + b64u(JSON.stringify({ u: c.url, k: c.key }));
+    return c.v === 2 ? "PP2-" + b64u(JSON.stringify(Object.assign({ u: c.url, s: c.secret }, c.ro ? { r: 1 } : {}))) : "PP1-" + b64u(JSON.stringify({ u: c.url, k: c.key }));
   }
   function parseInvite(text) {
     const m = String(text || "").match(/PP([12])-[A-Za-z0-9_-]+/);
@@ -2427,7 +2730,7 @@
     try {
       const o = JSON.parse(unb64u(m[0].slice(4)));
       if (!o || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(o.u)) return null;
-      if (m[1] === "2") return String(o.s || "").length >= 20 ? { v: 2, url: o.u, secret: o.s } : null;
+      if (m[1] === "2") return String(o.s || "").length >= 20 ? Object.assign({ v: 2, url: o.u, secret: o.s }, o.r ? { ro: true } : {}) : null;
       return String(o.k || "").length >= 20 ? { url: o.u, key: o.k } : null;
     } catch (e) { return null; }
   }
@@ -2464,12 +2767,18 @@
         <h2>👨‍👩‍👧 Condivisione attiva</h2>
         <p class="small">${c.err ? `⚠️ Ultimo tentativo non riuscito: ${esc(c.err)}. Riprovo da solo tra poco.` : "✅ Tutto collegato."} Ultima sincronizzazione riuscita: <b>${esc(when)}</b>.</p>
         <p class="small">${c.v === 2 ? "🔒 Dati cifrati sul telefono: " + (own ? "il vostro servizio Google" : "il servizio dell'app") + " conserva solo dati illeggibili." : "⚠️ Questo spazio è stato creato prima della cifratura: i dati sono leggibili nel Drive di chi ha creato il servizio."}</p>
+        ${c.ro ? `<p class="small"><b>👀 Sola lettura:</b> su questo telefono puoi vedere tutto, ma non modificare.</p>` : ""}
+        <label class="field"><span>Chi usa questo telefono?</span>
+          <input type="text" list="meList" data-change="me" value="${esc(me())}" placeholder="Es. Mamma, Papà, Nonna Lucia" autocomplete="off">
+          <datalist id="meList"><option value="Mamma"><option value="Papà"><option value="Nonna"><option value="Nonno"><option value="Babysitter"></datalist></label>
+        <p class="small muted" style="margin-top:-6px">Compare accanto a quello che segni nel diario e nella spesa.</p>
         <div class="btn-row">
           <button class="btn" data-act="sync-invite">📨 Invita qualcuno</button>
           <button class="btn ghost" data-act="sync-now">🔄 Sincronizza ora</button>
         </div>
         ${c.err ? `<button class="btn ghost block" data-act="sync-check" style="margin-top:10px">🔍 Verifica il collegamento</button>` : ""}
         ${c.v !== 2 ? `<button class="btn block" data-act="sync-encrypt" style="margin-top:10px">🔒 Passa alla cifratura</button>` : ""}
+        <button class="btn ghost block" data-act="backups" style="margin-top:10px">🗂️ Copie di sicurezza</button>
         <button class="btn ghost block" data-act="sync-newfamily" style="margin-top:10px">🏠 Crea uno spazio per un'altra famiglia</button>
         ${own ? `<button class="btn ghost block" data-act="sync-update" style="margin-top:8px">🛠️ Aggiorna il servizio Google</button>` : ""}
         <p class="small muted" style="margin:10px 0 0">Le foto del diario vengono cifrate e condivise con la famiglia; quelle dei piatti restano sul telefono che le ha scattate. Il codice di invito apre tutti i dati della famiglia: mandalo solo a persone di fiducia.</p>
@@ -2513,6 +2822,77 @@
         <div class="btn-row"><button class="btn" type="submit" style="flex:1">Unisciti</button><button class="btn ghost" type="button" data-act="close">Annulla</button></div>
       </form>`);
   }
+  // Copie di sicurezza: il servizio fa una copia del file della famiglia una volta alla settimana e ne tiene 6
+  async function autoBackup() {
+    const c = raw.get("sync", null);
+    if (!c) return;
+    try {
+      const codec = await getCodec(c), res = await postSync(c.url, { action: "backup", key: codec.space });
+      if (res && res.ok) raw.set("lastBackup", Date.now());
+      else if (res && Array.isArray(res.rec)) raw.set("lastBackup", Date.now()); // servizio senza copie: si riprova domani
+    } catch (e) { /* si riprova alla prossima sincronizzazione */ }
+  }
+  async function openBackups() {
+    const c = raw.get("sync", null);
+    if (!c) return;
+    openSheet(`<h2>🗂️ Copie di sicurezza</h2><p class="small muted">Cerco le copie…</p>`);
+    let res = null;
+    try { const codec = await getCodec(c); res = await postSync(c.url, { action: "backup-list", key: codec.space }); } catch (e) { res = { error: String(e.message || e) }; }
+    const body = res && Array.isArray(res.list)
+      ? (res.list.length ? `<div class="card" style="padding:0;overflow:hidden">${res.list.map(x => `<div class="food"><span class="st">🗂️</span><span class="grow">${fmt(parseISO(x.d), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}<br><span class="small muted">${Math.max(1, Math.round(x.size / 1024))} KB</span></span><button class="btn ghost small" data-act="backup-restore" data-d="${esc(x.d)}">Ripristina</button></div>`).join("")}</div>`
+        : `<p class="small">Ancora nessuna copia: la prima viene fatta in automatico entro un giorno.</p>`)
+      : `<p class="small">${res && res.error ? "Non riesco a leggere le copie: " + esc(res.error) : "Il servizio Google va aggiornato alla versione 6 per le copie di sicurezza."}</p>`;
+    openSheet(`<h2>🗂️ Copie di sicurezza</h2>
+      <p class="small">Ogni settimana il servizio salva una copia dei dati della famiglia nella cartella «Piccoli Passi - copie» del Drive, <b>cifrata</b> come i dati. Restano le ultime 6. Le foto del diario sono già nella cartella delle foto.</p>
+      ${body}
+      <p class="small muted">«Ripristina» riporta i dati com'erano quel giorno; quello che avete aggiunto dopo resta.</p>
+      <button class="btn ghost block" data-act="close">Chiudi</button>`);
+  }
+  async function restoreBackup(d) {
+    const c = raw.get("sync", null);
+    if (!c || !confirm("Ripristinare i dati del " + fmt(parseISO(d), { day: "numeric", month: "long" }) + "? Arriverà anche agli altri telefoni della famiglia.")) return;
+    toast("Ripristino in corso…");
+    try {
+      const codec = await getCodec(c), res = await postSync(c.url, { action: "backup-get", key: codec.space, d });
+      if (!res || !Array.isArray(res.rec)) throw new Error((res && res.error) || "copia non disponibile");
+      const cur = flatten(), meta = Object.assign({}, c.meta || {});
+      let n = 0;
+      for (const r of res.rec) { if (r.d) continue; const o = await codec.decode(r); if (o) { cur[o.n] = o.v; delete meta[o.n]; n++; } }
+      unflatten(cur);
+      raw.set("sync", Object.assign({}, raw.get("sync", c), { meta }));
+      closeSheet(); render(true); toast("Ripristinati " + n + " elementi ✅");
+      syncNow(false);
+    } catch (e) { toast("Ripristino non riuscito: " + (e.message || e)); }
+  }
+
+  // Membri in sola lettura (nonni): l'app non permette modifiche e non invia nulla
+  const isRO = () => { const c = raw.get("sync", null); return !!(c && c.ro); };
+  const RO_BLOCK = new Set(["log-add", "log-del", "sleep-start", "sleep-stop", "food", "food-again", "food-del", "g-add", "g-del", "ap-add", "ap-del", "ready", "done", "fav",
+    "kid-add", "kid-del", "ms-toggle", "plan-slot", "plan-auto", "plan-clear", "shop-add-plan", "shop-toggle", "shop-del", "shop-clear", "rem-add", "rem-done", "rem-del", "ev-add", "ev-del", "home-open", "sync-newfamily", "sync-encrypt", "backup-restore"]);
+  // Chi usa questo telefono: compare sulle voci del diario e della spesa
+  const me = () => String(raw.get("me", "") || "");
+  // Modifiche fatte qui e non ancora arrivate al servizio (per l'indicatore in alto)
+  function pendingCount() {
+    const c = raw.get("sync", null);
+    if (!c || c.ro) return 0;
+    const cur = flatten(), meta = c.meta || {};
+    let n = 0;
+    Object.keys(cur).forEach(k => { if (meta[k] !== hashStr(JSON.stringify(cur[k]))) n++; });
+    Object.keys(meta).forEach(k => { if (!(k in cur)) n++; });
+    return n;
+  }
+  function updateNetChip() {
+    const b = document.getElementById("netChip"), c = raw.get("sync", null);
+    if (!b) return;
+    const off = !navigator.onLine, n = c ? pendingCount() : 0;
+    b.hidden = !settings || (!off && !n && !(c && c.err));
+    b.textContent = off ? "📴" : syncing ? "🔄" : n ? "⏳ " + n : "⚠️";
+    b.setAttribute("aria-label", off ? "Senza connessione: le modifiche partiranno quando torni online" : n ? n + " modifiche da inviare alla famiglia" : "Condivisione con un problema: tocca per vedere");
+    b.title = b.getAttribute("aria-label");
+  }
+  window.addEventListener("online", () => { updateNetChip(); if (raw.get("sync", null)) syncNow(false); });
+  window.addEventListener("offline", updateNetChip);
+
   // Verifica del collegamento: cosa raggiunge questo telefono (da mandare a chi aiuta, senza dati personali)
   async function openSyncCheck() {
     const c = raw.get("sync", null);
@@ -2547,13 +2927,14 @@
     draw(true);
   }
 
-  function openInvite() {
-    const code = inviteCode();
+  function openInvite(ro) {
+    const code = inviteCode(ro ? Object.assign({}, raw.get("sync", null), { ro: true }) : null);
     const link = location.origin + location.pathname + "#/unisciti/" + code;
     const text = "Ti invito a seguire " + (kids.length === 1 && kids[0].name ? kids[0].name : "i nostri bimbi") + " con me su Piccoli Passi 🌱\n\n1) Apri l'app: " + location.origin + location.pathname +
       "\n2) Su iPhone aggiungila alla schermata Home e aprila da lì\n3) Tocca «Ho un codice di invito» e incolla questo codice:\n\n" + code + "\n\nOppure, se apri l'app nel browser, usa direttamente questo link: " + link;
     openSheet(`<h2>📨 Invita qualcuno</h2>
-      <p class="small">Manda questo invito a chi vuoi far collaborare (per esempio su WhatsApp). Chi lo riceve vedrà e potrà modificare tutti i dati della famiglia.</p>
+      <div class="segmented"><button class="${ro ? "" : "on"}" data-act="sync-invite">✏️ Può modificare</button><button class="${ro ? "on" : ""}" data-act="sync-invite-ro">👀 Solo lettura</button></div>
+      <p class="small">${ro ? "Per i nonni o la babysitter: chi lo riceve <b>vede</b> diario, foto, crescita e agenda, ma <b>non può cambiare niente</b>. L'app lo rispetta su quel telefono; il codice resta comunque riservato alla famiglia." : "Per il partner: chi lo riceve vedrà e potrà modificare tutti i dati della famiglia."} Mandalo per esempio su WhatsApp.</p>
       <textarea readonly class="invite-box" id="inviteText">${esc(text)}</textarea>
       <div class="btn-row">${navigator.share ? `<button class="btn" data-act="sync-share" style="flex:1">📤 Condividi</button>` : ""}<button class="btn ghost" data-act="sync-copy-invite" style="flex:1">📋 Copia</button></div>
       <button class="btn ghost block" data-act="close" style="margin-top:8px">Chiudi</button>`);
@@ -2589,13 +2970,14 @@
     if (!inv) { toast("Codice di invito non valido"); return; }
     if (kids.length && !confirm("Sostituire i dati di questo telefono con quelli condivisi dalla famiglia?")) return;
     applyingRemote = true;
-    try { Object.keys(localStorage).filter(k => /^pp\.(k\.|kids$|favs$|myEvents$|videos$|contacts$|home$)/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
+    try { Object.keys(localStorage).filter(k => /^pp\.(k\.|kids$|favs$|myEvents$|videos$|contacts$|home$|shop$)/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
     applyingRemote = false;
-    kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; home = null; activeKid = null; raw.set("activeKid", null); loadKid();
+    kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; home = null; shop = []; activeKid = null; raw.set("activeKid", null); loadKid();
     raw.set("sync", Object.assign({}, inv, { seq: 0, meta: {}, last: 0, err: "" }));
     closeSheet(); toast("Collegamento in corso…"); render(false);
     const ok = await syncWithRetry();
     location.hash = "#/oggi"; render(false);
+    if (ok && kids.length && !raw.get("onboarded", false)) setTimeout(() => openTour(0), 600);
     toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato! Ora inserisci il tuo bimbo per iniziare 🌱") : "Il servizio non risponde ancora: riprovo da solo");
   }
 
@@ -2722,6 +3104,7 @@
         <p class="small">Salva una copia di tutti i dati in un file, da conservare o da importare su un telefono nuovo. Le foto (del diario e dei piatti) non sono incluse: con la condivisione attiva quelle del diario restano comunque sul servizio, cifrate.</p>
         <div class="btn-row">
           <button class="btn ghost" data-act="export">⬇️ Esporta</button>
+          <button class="btn ghost" data-act="export-photos">⬇️ Esporta con le foto</button>
           <label class="btn ghost" style="cursor:pointer">⬆️ Importa<input type="file" accept="application/json,.json" data-act="import" hidden></label>
         </div>
       </div>
@@ -2737,6 +3120,7 @@
       </div>
       <div class="card">
         <h2>ℹ️ Informazioni</h2>
+        <button class="btn ghost small" data-act="tour" data-i="0" style="margin-bottom:10px">📘 Rivedi la guida all'app</button>
         <p class="small">Piccoli Passi raccoglie indicazioni basate sulle raccomandazioni di OMS, Ministero della Salute, Società Italiana di Pediatria, ESPGHAN e del programma Nati per Leggere. <b>Non sostituisce il parere del pediatra</b>: per ogni dubbio sulla salute o sull'alimentazione del tuo bambino, rivolgiti a lui.</p>
         <p class="small"><b>In emergenza chiama il 112.</b></p>
         <p class="small muted">Versione ${VERSION}</p>
@@ -2749,6 +3133,7 @@
     const t = e.target.closest("[data-act]");
     if (!t || t.tagName === "INPUT" && t.type === "file") return;
     const act = t.dataset.act;
+    if (isRO() && RO_BLOCK.has(act)) { e.preventDefault(); toast("👀 Sei in sola lettura: puoi guardare tutto, ma non modificare"); return; }
     switch (act) {
       case "set": ui[t.dataset.k] = t.dataset.v; render(true); break;
       case "set-bool": ui[t.dataset.k] = t.dataset.v === "1"; render(true); break;
@@ -2786,6 +3171,33 @@
       case "sync-join": openSyncJoin(""); break;
       case "sync-now": raw.del("photoShare"); syncNow(true); break;
       case "sync-check": openSyncCheck(); break;
+      case "backups": openBackups(); break;
+      case "ms-toggle": toggleMilestone(t.dataset.k); break;
+      case "tour": openTour(Number(t.dataset.i)); break;
+      case "tour-end": raw.set("onboarded", true); closeSheet(); break;
+      case "week-move": ui.wStart = iso(addDays(weekStart(), Number(t.dataset.d))); render(true); break;
+      case "plan-slot": openPlanSlot(t.dataset.d, t.dataset.m); break;
+      case "plan-set": setPlan(t.dataset.d, t.dataset.m, t.dataset.id); closeSheet(); render(true); break;
+      case "plan-auto": { const n = autoPlan(); toast(n ? "Proposte " + plural(n, "pappa", "pappe") + " ✨ Toccane una per cambiarla" : "La settimana è già piena"); render(true); break; }
+      case "plan-clear": if (confirm("Svuotare il piano di questa settimana?")) { const st = weekStart(); for (let k = 0; k < 7; k++) { const d = iso(addDays(st, k)); if (plan[d]) plan[d] = { pranzo: null, cena: null }; } S.set("plan", plan); render(true); } break;
+      case "plan-recipe": {
+        const r = recipeById(t.dataset.id), days = Array.from({ length: 7 }, (_, i) => addDays(today0(), i));
+        if (r) openSheet(`<h2>🗓️ ${esc(r.t)}</h2><p class="small muted">Quando la prepari?</p><div class="card" style="padding:0;overflow:hidden">${days.map(d => MEALS.map(([m, l]) => `<button class="food" data-act="plan-set" data-d="${iso(d)}" data-m="${m}" data-id="${r.id}"><span class="st">${l.split(" ")[0]}</span><span class="grow">${fmt(d, { weekday: "long", day: "numeric", month: "short" })} · ${l.split(" ")[1]}${(plan[iso(d)] || {})[m] ? `<br><span class="small muted">al posto di: ${esc((recipeById(plan[iso(d)][m]) || {}).t || "")}</span>` : ""}</span></button>`).join("")).join("")}</div><button class="btn ghost block" data-act="close" style="margin-top:10px">Chiudi</button>`);
+        break;
+      }
+      case "shop-add-plan": { const n = planIngredientsToShop(); toast(n ? plural(n, "ingrediente aggiunto", "ingredienti aggiunti") + " alla spesa 🛒" : "Niente da aggiungere: pianifica qualche pappa o sono già in lista"); if (n && !/spesa/.test(location.hash)) location.hash = "#/spesa"; else render(true); break; }
+      case "shop-toggle": { const x = shop.find(v => v.id === t.dataset.id); if (x) { x.done = !x.done; S.set("shop", shop); render(true); } break; }
+      case "shop-del": shop = shop.map(v => (v.id === t.dataset.id ? { id: v.id, del: true } : v)); S.set("shop", shop); render(true); break;
+      case "shop-clear": shop = shop.map(v => (v.done && !v.del ? { id: v.id, del: true } : v)); S.set("shop", shop); render(true); break;
+      case "rem-add": openRem(Number(t.dataset.i)); break;
+      case "rem-edit": openRem(null, t.dataset.id); break;
+      case "rem-del": if (confirm("Eliminare questo promemoria?")) { rem = rem.map(r => (r.id === t.dataset.id ? { id: r.id, del: true } : r)); S.set("rem", rem); closeSheet(); render(true); } break;
+      case "rem-done": remDone[t.dataset.key] = !remDone[t.dataset.key]; S.set("remDone", remDone); render(true); break;
+      case "rem-ics": { const r = rem.find(x => x.id === t.dataset.id); if (r) download("promemoria-" + r.id + ".ics", remIcs(r), "text/calendar;charset=utf-8"); break; }
+      case "auto-ics": { const x = autoReminders().find(y => y.id === t.dataset.id); if (x) download(x.id.replace(/:/g, "-") + ".ics", autoIcs(x), "text/calendar;charset=utf-8"); break; }
+      case "notif-on": if ("Notification" in window) Notification.requestPermission().then(() => { render(true); checkNotify(); }); break;
+      case "backup-restore": restoreBackup(t.dataset.d); break;
+      case "net-chip": if (!navigator.onLine) toast("📴 Sei senza connessione: quello che segni resta sul telefono e parte da solo quando torni online"); else { location.hash = "#/impostazioni"; syncNow(true); } break;
       case "cal-day": ui.dSel = t.dataset.d; ui.dMon = t.dataset.d.slice(0, 7) + "-01"; ui.dTab = "cal"; if (!/diario/.test(location.hash)) location.hash = "#/diario"; else render(true); break;
       case "cal-mon": { const m0 = parseISO(ui.dMon || (ui.dSel || iso(today0())).slice(0, 7) + "-01"); ui.dMon = iso(new Date(m0.getFullYear(), m0.getMonth() + Number(t.dataset.d), 1)); render(true); break; }
       case "log-add": openLog(t.dataset.type, t.dataset.d || iso(today0())); break;
@@ -2800,7 +3212,7 @@
       case "lg-unphoto": { const sp = t.closest("span"); if (sp.dataset.new) pendingPhotos = pendingPhotos.filter(p => p.id !== sp.dataset.new); sp.remove(); break; }
       case "sleep-start": {
         const d = iso(today0());
-        if (!sleeping()) { diary.push({ id: "l" + Date.now().toString(36), date: d, type: "sonno", time: nowHM(), end: null, kind: toMin(nowHM()) > 19 * 60 || toMin(nowHM()) < 6 * 60 ? "notte" : "nanna" }); S.set("diary", diary); toast("Buona nanna 😴"); }
+        if (!sleeping()) { diary.push({ id: "l" + Date.now().toString(36), date: d, type: "sonno", time: nowHM(), end: null, by: me() || undefined, kind: toMin(nowHM()) > 19 * 60 || toMin(nowHM()) < 6 * 60 ? "notte" : "nanna" }); S.set("diary", diary); toast("Buona nanna 😴"); }
         render(true); break;
       }
       case "sleep-stop": {
@@ -2811,7 +3223,8 @@
       case "photo-open": openPhoto(t.dataset.id, t.dataset.e); break;
       case "photo-save": { const b = await PhotoDB.get("d:" + t.dataset.id).catch(() => null); if (b) download("piccoli-passi-" + t.dataset.id + ".jpg", b, "image/jpeg"); break; }
       case "go-growth": ui.healthTab = "crescita"; location.hash = "#/salute"; break;
-      case "sync-invite": openInvite(); break;
+      case "sync-invite": openInvite(false); break;
+      case "sync-invite-ro": openInvite(true); break;
       case "sync-newfamily": openNewFamily(); break;
       case "sync-update": openSyncUpdate(); break;
       case "feed-reload": closeSheet(); toast("Cerco le notizie…"); loadFeed(true); break;
@@ -2915,11 +3328,18 @@
       case "ev-del":
         if (confirm("Eliminare questo evento?")) { myEvents = myEvents.filter(x => x.id !== t.dataset.id); S.set("myEvents", myEvents); render(true); }
         break;
-      case "export": {
+      case "export": case "export-photos": {
         const data = { app: "piccoli-passi", v: 2, exported: new Date().toISOString(), kids, activeKid, kidData: {} };
         SHARED_KEYS.forEach(k => { data[k] = raw.get(k, null); });
         kids.forEach(k => { data.kidData[k.id] = {}; KID_KEYS.forEach(key => { data.kidData[k.id][key] = raw.get("k." + k.id + "." + key, null); }); });
-        download("piccoli-passi-backup-" + iso(today0()) + ".json", JSON.stringify(data, null, 2), "application/json");
+        if (act === "export-photos") {
+          // le foto del diario di tutti i figli, dentro lo stesso file
+          toast("Preparo il file con le foto…");
+          data.photos = {};
+          const ids = kids.flatMap(k => (raw.get("k." + k.id + ".diary", []) || []).filter(x => !x.del).flatMap(x => x.photos || []));
+          for (const pid of ids) { const b = await PhotoDB.get("d:" + pid).catch(() => null) || await fetchSharedPhoto(pid); if (b) data.photos[pid] = bytesToB64u(new Uint8Array(await b.arrayBuffer())); }
+        }
+        download("piccoli-passi-" + (act === "export-photos" ? "completo-" : "backup-") + iso(today0()) + ".json", JSON.stringify(data), "application/json");
         break;
       }
       case "reset":
@@ -2948,6 +3368,7 @@
   }, true);
 
   document.addEventListener("change", e => {
+    if (e.target.dataset && e.target.dataset.change === "me") { raw.set("me", e.target.value.trim().slice(0, 30)); toast("Fatto: le tue voci avranno il nome «" + (me() || "—") + "»"); return; }
     if (e.target.dataset && e.target.dataset.act === "lg-photo" && e.target.files.length) {
       const files = [...e.target.files].slice(0, 10), prev = sheet.querySelector("#lgPrev");
       e.target.value = "";
@@ -2985,8 +3406,9 @@
           kids = newKids; raw.set("kids", kids);
           newKids.forEach(k => KID_KEYS.forEach(key => { const v = (kidData[k.id] || {})[key]; if (v != null) raw.set("k." + k.id + "." + key, v); }));
           SHARED_KEYS.forEach(k => { if (data[k] != null) raw.set(k, data[k]); });
+          Object.keys(data.photos || {}).forEach(pid => PhotoDB.set("d:" + pid, new Blob([b64uToBytes(data.photos[pid])], { type: "image/jpeg" })).catch(() => { /* spazio pieno */ }));
           switchKid(kids.some(k => k.id === data.activeKid) ? data.activeKid : (kids[0] || {}).id || null);
-          favs = raw.get("favs", {}); myEvents = raw.get("myEvents", []); contacts = raw.get("contacts", {}); videos = raw.get("videos", {});
+          favs = raw.get("favs", {}); myEvents = raw.get("myEvents", []); contacts = raw.get("contacts", {}); videos = raw.get("videos", {}); shop = raw.get("shop", []);
           evKm = raw.get("evKm", 50); theme = raw.get("theme", "auto"); applyTheme();
           toast("Dati importati ✅"); render(false);
         } catch (err) { toast("File non valido"); }
@@ -2999,6 +3421,7 @@
   document.addEventListener("submit", e => {
     const f = e.target;
     e.preventDefault();
+    if (isRO() && !/^(syncJoinForm|syncSetupForm)$/.test(f.id)) { toast("👀 Sei in sola lettura: puoi guardare tutto, ma non modificare"); return; }
     const fd = new FormData(f);
     if (f.id === "welcomeForm" || f.id === "settingsForm") {
       const birth = fd.get("birth");
@@ -3009,6 +3432,7 @@
       if (f.id === "welcomeForm") switchKid(activeKid);
       if (f.id === "settingsForm") toast("Salvato ✅");
       location.hash = "#/oggi"; render(false);
+      if (f.id === "welcomeForm" && !raw.get("onboarded", false)) setTimeout(() => openTour(0), 350);
     } else if (f.id === "homeForm") {
       const q = String(fd.get("q") || "").trim();
       if (!q) return;
@@ -3057,6 +3481,16 @@
       if (g.w && g.w > 30) g.w = g.w / 1000; // scritto in grammi
       if (!g.w && !g.l && !g.h) { toast("Inserisci almeno una misura"); return; }
       growth = growth.filter(x => x.id !== g.id).concat(g); S.set("growth", growth); closeSheet(); toast("Misurazione salvata 📏"); render(true);
+    } else if (f.id === "shopForm") {
+      const v = String(fd.get("t") || "").trim();
+      if (v && addShop(v)) { S.set("shop", shop); render(true); setTimeout(() => { const i = app.querySelector("#shopForm input"); if (i) i.focus(); }, 50); } else toast("È già in lista");
+    } else if (f.id === "remForm") {
+      const r = saveRem(f, fd); render(true);
+      // il file per il calendario va aperto con un tocco (i telefoni bloccano gli scaricamenti automatici)
+      openSheet(`<h2>🔔 Promemoria salvato</h2><p>Perché il telefono ti avvisi anche con l'app chiusa, aggiungilo al suo calendario:</p>
+        <button class="btn block" data-act="rem-ics" data-id="${esc(r.id)}">📅 Aggiungi al calendario del telefono</button>
+        <p class="small muted">Si apre il calendario con l'evento e l'avviso già impostati: conferma con «Aggiungi».</p>
+        <button class="btn ghost block" data-act="close" style="margin-top:8px">Più tardi</button>`);
     } else if (f.id === "logForm") {
       if (saveLog(f, fd)) { closeSheet(); toast("Segnato nel diario ✅"); render(true); }
     } else if (f.id === "apptForm") {

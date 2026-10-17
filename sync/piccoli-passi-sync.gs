@@ -12,7 +12,7 @@
  *   Esegui come: Me · Chi ha accesso: Chiunque
  */
 var FILE_PREFIX = 'piccoli-passi-';
-var VERSION = 5;
+var VERSION = 6;
 
 function doGet() {
   return json_({ ok: true, app: 'piccoli-passi', v: VERSION, msg: 'Servizio di condivisione attivo.' });
@@ -25,6 +25,8 @@ function doPost(e) {
   if (req.action === 'news') return json_(news_(req.q));
   // Foto del diario: arrivano già cifrate dal telefono, una per file
   if (req.action === 'blob-put' || req.action === 'blob-get' || req.action === 'blob-del') return json_(blob_(req));
+  // Copie di sicurezza settimanali dello spazio (cifrate come i dati)
+  if (req.action === 'backup' || req.action === 'backup-list' || req.action === 'backup-get') return json_(backup_(req));
 
   var key = String(req.key || '');                            // identificativo dello spazio
   if (key.length < 20) return json_({ error: 'codice non valido' });
@@ -98,6 +100,35 @@ function blob_(req) {
     folder.createFile(name, data, 'text/plain');
   }
   return { ok: true };
+}
+
+/* Copie di sicurezza: una alla settimana per spazio, nella cartella «Piccoli Passi - copie»; si tengono le ultime 6.
+   Sono copie del file dello spazio, quindi cifrate come lui. */
+function backup_(req) {
+  var key = String(req.key || '');
+  if (key.length < 20) return { error: 'codice non valido' };
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, key);
+  var base = FILE_PREFIX + Utilities.base64EncodeWebSafe(digest).replace(/=+$/, '').slice(0, 32);
+  var list = [], it = DriveApp.searchFiles("title contains '" + base + "-copia-' and trashed = false");
+  while (it.hasNext()) { var f = it.next(); var m = f.getName().match(/-copia-(\d{4}-\d{2}-\d{2})\.json$/); if (m) list.push({ d: m[1], f: f }); }
+  list.sort(function (a, b) { return a.d < b.d ? 1 : -1; });
+  if (req.action === 'backup-list') return { list: list.map(function (x) { return { d: x.d, size: x.f.getSize() }; }) };
+  if (req.action === 'backup-get') {
+    var hit = list.filter(function (x) { return x.d === String(req.d); })[0];
+    if (!hit) return { error: 'copia non trovata' };
+    var db = JSON.parse(hit.f.getBlob().getDataAsString()), out = [];
+    for (var k in db.rec) out.push({ k: k, v: db.rec[k].v, t: db.rec[k].t, d: db.rec[k].d });
+    return { rec: out };
+  }
+  var today = Utilities.formatDate(new Date(), 'Europe/Rome', 'yyyy-MM-dd');
+  if (list.length && (new Date(today) - new Date(list[0].d)) < 6 * 864e5) return { ok: true, last: list[0].d };
+  var file = findFile_(base + '.json', PropertiesService.getScriptProperties());
+  if (!file) return { ok: true, last: null };
+  var folders = DriveApp.getFoldersByName('Piccoli Passi - copie');
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Piccoli Passi - copie');
+  folder.createFile(base + '-copia-' + today + '.json', file.getBlob().getDataAsString(), 'application/json');
+  list.slice(5).forEach(function (x) { x.f.setTrashed(true); });
+  return { ok: true, last: today };
 }
 
 /* Trova il file dello spazio. L'indirizzo del file è ricordato nelle proprietà dello script (più veloce

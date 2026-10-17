@@ -6,11 +6,13 @@ L'app è divisa in cinque sezioni:
 
 - **Oggi**: il riquadro del mese (illustrazione, età, avanzamento, aggiornamento del mese), il diario di oggi con l'aggiunta rapida (pappa, latte, nanna con timer, pannolino, foto, peso), appuntamenti e vaccinazioni in arrivo, allergene da introdurre, consiglio, ricetta, gioco ed eventi del giorno.
 - **Diario**: calendario mensile; per ogni giorno pappe (con i cibi, che entrano da soli tra i cibi provati), latte, nanne (anche a cavallo della mezzanotte), pannolini, peso e misure (che finiscono nelle curve di crescita), salute (febbre, farmaci, sintomi), prime volte, note e foto. Poi **Ricordi** (tutte le foto per mese) e **Andamento** (sonno, poppate, pappe e pannolini delle ultime due settimane).
-- **Pappa**: ricette (con versione Bimby®), guida allo svezzamento, cibi provati, percorso allergeni.
-- **Salute**: agenda, bilanci, vaccinazioni, curve di crescita OMS, domande per il pediatra, guide «Come si fa», azienda sanitaria della zona; dal 🆘 in alto le emergenze.
-- **Scopri**: giochi e tappe dello sviluppo, mese per mese, libri e filastrocche, eventi e luoghi del proprio comune.
+- **Pappa**: ricette (con versione Bimby®), settimana delle pappe con proposta automatica, lista della spesa condivisa, guida allo svezzamento, cibi provati, percorso allergeni.
+- **Salute**: agenda, promemoria (vitamina D, farmaci ogni tot ore, bilanci e vaccinazioni in arrivo: si aggiungono al calendario del telefono, che avvisa anche ad app chiusa), bilanci, vaccinazioni, curve di crescita OMS, domande per il pediatra, guide «Come si fa», azienda sanitaria della zona; dal 🆘 in alto le emergenze.
+- **Scopri**: giochi, tappe dello sviluppo da spuntare (finiscono nel diario) con i segnali per cui parlarne con il pediatra, mese per mese, libri e filastrocche, eventi e luoghi del proprio comune.
 
-Più figli con profili separati, condivisione cifrata con la famiglia (anche le foto del diario), tema chiaro/scuro.
+Più figli con profili separati, tema chiaro/scuro, guida al primo avvio.
+
+Famiglia: condivisione cifrata (anche le foto del diario), nome di chi scrive su ogni voce, inviti in **sola lettura** per i nonni (l'app non permette modifiche su quel telefono; è una regola dell'app, non del servizio), indicatore in alto per connessione assente o modifiche ancora da inviare, **copie di sicurezza** settimanali sul Drive (servizio versione 6, ultime 6 copie, ripristinabili da Impostazioni) ed esportazione su file anche con le foto.
 
 ## Come funziona per ogni comune
 
