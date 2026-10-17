@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "2.2.0";
+  const VERSION = "3.0.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -9,7 +9,10 @@
   /* ---------------- Storage (solo su questo dispositivo) ---------------- */
   const raw = {
     get(k, d) { try { const v = localStorage.getItem("pp." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem("pp." + k, JSON.stringify(v)); } catch (e) { toast("Non riesco a salvare su questo dispositivo"); } },
+    set(k, v) {
+      try { localStorage.setItem("pp." + k, JSON.stringify(v)); } catch (e) { toast("Non riesco a salvare su questo dispositivo"); }
+      if (typeof onLocalChange === "function") onLocalChange(k);
+    },
     del(k) { try { localStorage.removeItem("pp." + k); } catch (e) { /* ignore */ } }
   };
   // Dati di ogni figlio (salvati come "k.<id>.<chiave>") e dati in comune per la famiglia
@@ -146,6 +149,7 @@
   }
   function closeSheet() {
     sheet.hidden = true; sheetBackdrop.hidden = true; sheet.innerHTML = ""; document.body.style.overflow = "";
+    if (pendingRender) { pendingRender = false; render(true); }
   }
   sheetBackdrop.addEventListener("click", closeSheet);
 
@@ -287,7 +291,11 @@
       <label class="field"><span>Maschio o femmina? <small class="muted" style="display:inline;font-weight:400">(serve per le curve di crescita)</small></span><select name="sex"><option value="m">Maschio</option><option value="f">Femmina</option></select></label>
       <button class="btn block" type="submit">Iniziamo 🌱</button>
       <p class="small muted center" style="margin-top:12px">I dati restano solo su questo telefono.</p>
-    </form>`;
+    </form>
+    <div class="card center">
+      <p class="small" style="margin-bottom:8px">Qualcuno della famiglia usa già Piccoli Passi e ti ha invitato?</p>
+      <button class="btn ghost block" data-act="sync-join">👨‍👩‍👧 Ho un codice di invito</button>
+    </div>`;
   }
 
   /* ---------------- Oggi ---------------- */
@@ -1243,6 +1251,186 @@
         <div style="padding:0 16px 14px"><div class="prose">${g.html}</div>${videoBlock("care:" + g.id, g.videos, g.q)}</div></details>`).join("")}`;
   }
 
+  /* ---------------- Condivisione con la famiglia ---------------- */
+  // Ogni dato diventa un «record» (chiave → valore). I telefoni si scambiano solo i record cambiati;
+  // il servizio Google (sync/piccoli-passi-sync.gs) tiene, per ogni record, la modifica più recente.
+  // "var" perché queste variabili servono già durante l'avvio (prima che il codice arrivi qui)
+  var SYNC_KID_MAPS = ["foods", "ready", "done", "health"];
+  var SYNC_KID_LISTS = ["growth", "appts", "questions"];
+  var SYNC_LOCAL_ONLY = ["sync", "activeKid", "evKm", "theme", "installDismissed"];
+  var syncing = false, syncTimer = null, applyingRemote = false, pendingRender = false;
+  const hashStr = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return (h >>> 0).toString(36) + str.length.toString(36); };
+  function onLocalChange(k) {
+    if (applyingRemote || !SYNC_LOCAL_ONLY || SYNC_LOCAL_ONLY.includes(k) || !raw.get("sync", null)) return;
+    clearTimeout(syncTimer); syncTimer = setTimeout(() => syncNow(false), 2500);
+  }
+  function flatten() {
+    const f = {};
+    kids.forEach(k => {
+      f["kid:" + k.id] = k;
+      SYNC_KID_MAPS.forEach(n => { const o = raw.get("k." + k.id + "." + n, {}) || {}; Object.keys(o).forEach(id => { f["k:" + k.id + ":" + n + ":" + id] = o[id]; }); });
+      SYNC_KID_LISTS.forEach(n => (raw.get("k." + k.id + "." + n, []) || []).forEach(x => { if (x && x.id) f["k:" + k.id + ":" + n + ":" + x.id] = x; }));
+    });
+    const fv = raw.get("favs", {}) || {}; Object.keys(fv).forEach(id => { f["favs:" + id] = fv[id]; });
+    (raw.get("myEvents", []) || []).forEach(x => { if (x && x.id) f["myEvents:" + x.id] = x; });
+    const vd = raw.get("videos", {}) || {}; Object.keys(vd).forEach(id => { f["videos:" + id] = vd[id]; });
+    const ct = raw.get("contacts", {}) || {}; if (Object.keys(ct).length) f.contacts = ct;
+    return f;
+  }
+  function unflatten(f) {
+    const ks = [], per = {}, fv = {}, ev = [], vd = {};
+    let ct = {};
+    Object.keys(f).forEach(key => {
+      const v = f[key], p = key.split(":");
+      if (p[0] === "kid") ks.push(v);
+      else if (p[0] === "k") {
+        const kid = p[1], n = p[2], id = p.slice(3).join(":");
+        per[kid] = per[kid] || {};
+        if (SYNC_KID_LISTS.includes(n)) (per[kid][n] = per[kid][n] || []).push(v);
+        else (per[kid][n] = per[kid][n] || {})[id] = v;
+      }
+      else if (p[0] === "favs") fv[p.slice(1).join(":")] = v;
+      else if (p[0] === "myEvents") ev.push(v);
+      else if (p[0] === "videos") vd[p.slice(1).join(":")] = v;
+      else if (key === "contacts") ct = v;
+    });
+    applyingRemote = true;
+    try {
+      const old = kids.map(k => k.id);
+      kids = ks.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      raw.set("kids", kids);
+      old.filter(id => !kids.some(k => k.id === id)).forEach(id => KID_KEYS.forEach(n => raw.del("k." + id + "." + n)));
+      kids.forEach(k => {
+        const d = per[k.id] || {};
+        SYNC_KID_MAPS.forEach(n => raw.set("k." + k.id + "." + n, d[n] || {}));
+        SYNC_KID_LISTS.forEach(n => raw.set("k." + k.id + "." + n, (d[n] || []).sort((a, b) => String(a.id).localeCompare(String(b.id)))));
+      });
+      raw.set("favs", fv); raw.set("myEvents", ev); raw.set("videos", vd); raw.set("contacts", ct);
+    } finally { applyingRemote = false; }
+    favs = fv; myEvents = ev; videos = vd; contacts = ct;
+    if (!kids.some(k => k.id === activeKid)) activeKid = kids.length ? kids[0].id : null;
+    raw.set("activeKid", activeKid);
+    loadKid();
+  }
+  async function syncNow(manual) {
+    const cfg = raw.get("sync", null);
+    if (!cfg || syncing) return false;
+    syncing = true; clearTimeout(syncTimer);
+    try {
+      const cur = flatten(), meta = cfg.meta || {}, now = Date.now(), changes = [];
+      Object.keys(cur).forEach(k => { if (meta[k] !== hashStr(JSON.stringify(cur[k]))) changes.push({ k, v: cur[k], t: now }); });
+      Object.keys(meta).forEach(k => { if (!(k in cur)) changes.push({ k, v: null, t: now, d: true }); });
+      const res = await fetch(cfg.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ key: cfg.key, since: cfg.seq || 0, changes }) });
+      const data = await res.json();
+      if (!data || data.error || !Array.isArray(data.rec)) throw new Error((data && data.error) || "risposta non valida");
+      let changed = false;
+      data.rec.forEach(r => {
+        if (r.d) { if (r.k in cur) { delete cur[r.k]; changed = true; } }
+        else if (JSON.stringify(cur[r.k]) !== JSON.stringify(r.v)) { cur[r.k] = r.v; changed = true; }
+      });
+      if (changed) unflatten(cur);
+      const newMeta = {};
+      Object.keys(cur).forEach(k => { newMeta[k] = hashStr(JSON.stringify(cur[k])); });
+      raw.set("sync", Object.assign({}, raw.get("sync", cfg), { seq: data.seq, meta: newMeta, last: Date.now(), err: "" }));
+      if (changed || manual || /impostazioni/.test(location.hash)) { if (sheet.hidden) render(true); else pendingRender = true; }
+      if (manual) toast(changed ? "Dati aggiornati dalla famiglia ✅" : "Tutto sincronizzato ✅");
+      return true;
+    } catch (err) {
+      const c = raw.get("sync", null);
+      if (c) raw.set("sync", Object.assign(c, { err: String(err && err.message || err) }));
+      if (manual) toast("Sincronizzazione non riuscita: controlla la connessione");
+      return false;
+    } finally { syncing = false; }
+  }
+  const b64u = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const unb64u = str => decodeURIComponent(escape(atob(str.replace(/-/g, "+").replace(/_/g, "/"))));
+  function inviteCode() { const c = raw.get("sync", null); return c ? "PP1-" + b64u(JSON.stringify({ u: c.url, k: c.key })) : ""; }
+  function parseInvite(text) {
+    const m = String(text || "").match(/PP1-[A-Za-z0-9_-]+/);
+    if (!m) return null;
+    try { const o = JSON.parse(unb64u(m[0].slice(4))); return o && /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(o.u) && String(o.k || "").length >= 20 ? o : null; } catch (e) { return null; }
+  }
+  function randomKey() { const a = new Uint8Array(24); crypto.getRandomValues(a); return btoa(String.fromCharCode.apply(null, a)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+
+  function syncCard() {
+    const c = raw.get("sync", null);
+    if (!c) return `<div class="card tint-blue">
+        <h2>👨‍👩‍👧 Condividi con la famiglia</h2>
+        <p class="small">Tu e chi inviti (per esempio la mamma, il papà o i nonni) vedete e modificate gli stessi dati: figli, diario, crescita, agenda, preferiti. I dati si salvano in un file sul <b>tuo Google Drive</b>.</p>
+        <div class="btn-row"><button class="btn" data-act="sync-setup">Attiva la condivisione</button><button class="btn ghost" data-act="sync-join">Ho un codice di invito</button></div>
+      </div>`;
+    const when = c.last ? new Date(c.last).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "mai";
+    return `<div class="card tint-green">
+        <h2>👨‍👩‍👧 Condivisione attiva</h2>
+        <p class="small">${c.err ? `⚠️ Ultimo tentativo non riuscito (${esc(c.err)}). Riproverò da solo.` : "✅ Tutto collegato."} Ultima sincronizzazione: <b>${esc(when)}</b>.</p>
+        <div class="btn-row">
+          <button class="btn" data-act="sync-invite">📨 Invita qualcuno</button>
+          <button class="btn ghost" data-act="sync-now">🔄 Sincronizza ora</button>
+        </div>
+        <p class="small muted" style="margin:10px 0 0">Le foto dei piatti restano solo sul telefono che le ha scattate. Il codice di invito dà accesso a tutti i dati: mandalo solo a persone di fiducia.</p>
+        <button class="btn danger small" data-act="sync-leave" style="margin-top:8px">Scollega questo telefono</button>
+      </div>`;
+  }
+
+  function openSyncSetup() {
+    openSheet(`<h2>👨‍👩‍👧 Attiva la condivisione</h2>
+      <p class="small">Si fa <b>una volta sola</b>, meglio dal computer (5 minuti). Crei un piccolo servizio gratuito sul tuo account Google che conserva i dati della famiglia nel tuo Drive.</p>
+      <ol class="steps small">
+        <li>Apri <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com</a> e crea un <b>nuovo progetto</b> (chiamalo «Piccoli Passi»).</li>
+        <li>Cancella il codice che c'è e incolla questo: <button class="btn ghost small" data-act="sync-copy-script" type="button">📋 Copia il codice</button></li>
+        <li>Premi <b>Esegui il deployment → Nuovo deployment</b>. Come tipo scegli <b>App web</b>, poi «Esegui come: <b>Me</b>» e «Chi ha accesso: <b>Chiunque</b>». Premi <b>Esegui il deployment</b>.</li>
+        <li>Google chiede di <b>autorizzare</b> l'accesso al Drive: scegli il tuo account. Se compare «Google non ha verificato questa app», tocca <b>Avanzate → Vai a Piccoli Passi</b>: è normale, l'app sei tu.</li>
+        <li>Copia l'<b>URL dell'app web</b> (finisce con <code>/exec</code>) e incollalo qui sotto.</li>
+      </ol>
+      <form id="syncSetupForm">
+        <label class="field"><span>URL dell'app web</span><input type="text" inputmode="url" autocapitalize="off" autocorrect="off" name="url" required placeholder="https://script.google.com/macros/s/…/exec"></label>
+        <div class="btn-row"><button class="btn" type="submit" style="flex:1">Collega</button><button class="btn ghost" type="button" data-act="close">Annulla</button></div>
+      </form>`);
+  }
+  function openSyncJoin(prefill) {
+    openSheet(`<h2>👨‍👩‍👧 Unisciti alla famiglia</h2>
+      <p class="small">Incolla il codice che hai ricevuto (inizia con <b>PP1-</b>), oppure tutto il messaggio di invito.</p>
+      <form id="syncJoinForm">
+        <label class="field"><span>Codice di invito</span><textarea name="code" required autocapitalize="off" autocorrect="off" placeholder="PP1-…">${esc(prefill || "")}</textarea></label>
+        ${kids.length ? `<p class="small" style="color:var(--danger)">Attenzione: i dati già presenti su questo telefono verranno sostituiti da quelli condivisi.</p>` : ""}
+        <div class="btn-row"><button class="btn" type="submit" style="flex:1">Unisciti</button><button class="btn ghost" type="button" data-act="close">Annulla</button></div>
+      </form>`);
+  }
+  function openInvite() {
+    const code = inviteCode();
+    const link = location.origin + location.pathname + "#/unisciti/" + code;
+    const text = "Ti invito a seguire " + (kids.length === 1 && kids[0].name ? kids[0].name : "i nostri bimbi") + " con me su Piccoli Passi 🌱\n\n1) Apri l'app: " + location.origin + location.pathname +
+      "\n2) Su iPhone aggiungila alla schermata Home e aprila da lì\n3) Tocca «Ho un codice di invito» e incolla questo codice:\n\n" + code + "\n\nOppure, se apri l'app nel browser, usa direttamente questo link: " + link;
+    openSheet(`<h2>📨 Invita qualcuno</h2>
+      <p class="small">Manda questo invito a chi vuoi far collaborare (per esempio su WhatsApp). Chi lo riceve vedrà e potrà modificare tutti i dati della famiglia.</p>
+      <textarea readonly class="invite-box" id="inviteText">${esc(text)}</textarea>
+      <div class="btn-row">${navigator.share ? `<button class="btn" data-act="sync-share" style="flex:1">📤 Condividi</button>` : ""}<button class="btn ghost" data-act="sync-copy-invite" style="flex:1">📋 Copia</button></div>
+      <button class="btn ghost block" data-act="close" style="margin-top:8px">Chiudi</button>`);
+    sheet.dataset.invite = text;
+  }
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); return true; }
+    catch (e) {
+      const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand("copy"); } catch (e2) { /* ignore */ }
+      ta.remove(); return ok;
+    }
+  }
+  async function joinFamily(code) {
+    const inv = parseInvite(code);
+    if (!inv) { toast("Codice di invito non valido"); return; }
+    if (kids.length && !confirm("Sostituire i dati di questo telefono con quelli condivisi dalla famiglia?")) return;
+    applyingRemote = true;
+    try { Object.keys(localStorage).filter(k => /^pp\.(k\.|kids$|favs$|myEvents$|videos$|contacts$)/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
+    applyingRemote = false;
+    kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; activeKid = null; raw.set("activeKid", null); loadKid();
+    raw.set("sync", { url: inv.u, key: inv.k, seq: 0, meta: {}, last: 0, err: "" });
+    closeSheet(); toast("Collegamento in corso…");
+    const ok = await syncNow(false);
+    location.hash = "#/oggi"; render(false);
+    toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato. Non ci sono ancora dati condivisi.") : "Non riesco a collegarmi: controlla la connessione e riprova da Impostazioni");
+  }
+
   /* ---------------- Impostazioni ---------------- */
   function viewSettings() {
     return `
@@ -1267,9 +1455,10 @@
         <p class="small muted" style="margin:8px 0 0">«Automatico» segue l'impostazione del telefono.</p>
       </div>
       ${installCard(true)}
+      ${syncCard()}
       <div class="card">
-        <h2>💾 Backup e condivisione</h2>
-        <p class="small">Diario, preferiti ed eventi sono salvati <b>solo su questo telefono</b>. Per passarli all'altro genitore o a un telefono nuovo: <b>esporta</b> il file, mandalo (per esempio su WhatsApp o per email) e <b>importalo</b> sull'altro telefono.</p>
+        <h2>💾 Backup</h2>
+        <p class="small">Salva una copia di tutti i dati in un file, da conservare o da importare su un telefono nuovo. Le foto dei piatti non sono incluse.</p>
         <div class="btn-row">
           <button class="btn ghost" data-act="export">⬇️ Esporta</button>
           <label class="btn ghost" style="cursor:pointer">⬆️ Importa<input type="file" accept="application/json,.json" data-act="import" hidden></label>
@@ -1306,6 +1495,18 @@
         }
         break;
       case "play": openVideo(t.dataset.id, t.dataset.t); break;
+      case "sync-setup": openSyncSetup(); break;
+      case "sync-join": openSyncJoin(""); break;
+      case "sync-now": syncNow(true); break;
+      case "sync-invite": openInvite(); break;
+      case "sync-copy-script": toast(await copyText(SYNC_SCRIPT) ? "Codice copiato 📋 Incollalo in Apps Script" : "Non riesco a copiare: lo trovi nel file sync/piccoli-passi-sync.gs"); break;
+      case "sync-copy-invite": toast(await copyText(sheet.dataset.invite || "") ? "Invito copiato 📋" : "Seleziona il testo e copialo"); break;
+      case "sync-share":
+        try { await navigator.share({ title: "Piccoli Passi", text: sheet.dataset.invite || "" }); } catch (err) { /* annullato */ }
+        break;
+      case "sync-leave":
+        if (confirm("Scollegare questo telefono? I dati restano qui, ma non si aggiorneranno più con quelli della famiglia.")) { raw.del("sync"); toast("Telefono scollegato"); render(true); }
+        break;
       case "photo-del":
         if (confirm("Togliere la vostra foto e tornare all'illustrazione?")) PhotoDB.del(t.dataset.key).then(() => render(true)).catch(() => toast("Non riesco a togliere la foto"));
         break;
@@ -1456,6 +1657,17 @@
       if (f.id === "welcomeForm") switchKid(activeKid);
       if (f.id === "settingsForm") toast("Salvato ✅");
       location.hash = "#/oggi"; render(false);
+    } else if (f.id === "syncSetupForm") {
+      const url = String(fd.get("url") || "").trim();
+      if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec/.test(url)) { toast("L'indirizzo deve iniziare con https://script.google.com e finire con /exec"); return; }
+      raw.set("sync", { url, key: randomKey(), seq: 0, meta: {}, last: 0, err: "" });
+      toast("Collegamento in corso…");
+      syncNow(false).then(ok => {
+        if (ok) { closeSheet(); toast("Condivisione attiva ✅ Ora puoi invitare qualcuno"); render(true); openInvite(); }
+        else { raw.del("sync"); toast("Non riesco a collegarmi: controlla l'URL e che l'accesso sia «Chiunque»"); }
+      });
+    } else if (f.id === "syncJoinForm") {
+      joinFamily(fd.get("code"));
     } else if (f.id === "videoForm") {
       const id = ytId(fd.get("url"));
       if (!id) { toast("Non riconosco il link: copialo da YouTube con «Condividi»"); return; }
@@ -1507,8 +1719,22 @@
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !sheet.hidden) closeSheet(); });
 
   /* ---------------- Avvio ---------------- */
+  function handleInviteLink() {
+    const m = location.hash.match(/^#\/unisciti\/(.+)$/);
+    if (!m) return false;
+    history.replaceState(null, "", "#/oggi");
+    setTimeout(() => openSyncJoin(decodeURIComponent(m[1])), 300);
+    return true;
+  }
+  window.addEventListener("hashchange", handleInviteLink);
   if (!location.hash) history.replaceState(null, "", "#/oggi");
+  handleInviteLink();
   render(false);
+  if (raw.get("sync", null)) {
+    syncNow(false);
+    setInterval(() => { if (document.visibilityState === "visible") syncNow(false); }, 60000);
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && raw.get("sync", null)) syncNow(false); });
 
   // Aggiorna la pagina "Oggi" se l'app resta aperta a cavallo della mezzanotte
   let lastDay = dayN();

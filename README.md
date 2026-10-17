@@ -13,8 +13,20 @@ Web app installabile (PWA) per accompagnare lo svezzamento e la crescita del bam
 
 **Più figli**: ogni figlio ha il suo profilo (selettore in alto con il nome). Diario, allergeni, crescita, agenda, giochi fatti e domande sono separati; preferiti, eventi, numeri di emergenza e tema sono in comune. L'agenda ha anche la vista «Tutta la famiglia».
 
-Funziona offline. Nomi, date di nascita, diario e preferiti restano **solo sul telefono**: nel codice non c'è nessun dato personale.
-Con «Esporta/Importa» (in Impostazioni) puoi copiare i dati, di tutti i figli, sul telefono dell'altro genitore.
+Funziona offline. Nel codice non c'è nessun dato personale: nomi, date di nascita e diario restano sul telefono, oppure nel **tuo** Google Drive se attivi la condivisione.
+
+## Condividere con la famiglia
+
+In **Impostazioni → Condividi con la famiglia** l'app guida passo passo. In breve:
+
+1. Una volta sola, su [script.google.com](https://script.google.com) crei un nuovo progetto e incolli il codice di `sync/piccoli-passi-sync.gs` (l'app ha il pulsante «Copia il codice»).
+2. **Esegui il deployment → Nuovo deployment → App web**, con «Esegui come: Me» e «Chi ha accesso: Chiunque». Autorizzi l'accesso al Drive e copi l'URL che finisce con `/exec`.
+3. Incolli l'URL nell'app e premi **Collega**. Poi **Invita qualcuno**: il messaggio contiene un codice `PP1-…` (o un link diretto).
+4. Chi riceve l'invito apre l'app, tocca **Ho un codice di invito** e lo incolla.
+
+I dati condivisi stanno in un file `piccoli-passi-….json` nel Drive di chi ha pubblicato lo script. Ogni telefono manda e riceve solo i dati cambiati; se due persone modificano lo stesso elemento vince la modifica più recente. Il codice di invito dà accesso ai dati: mandalo solo a persone di fiducia. Le foto dei piatti non vengono condivise.
+
+Resta anche il backup manuale: «Esporta/Importa» in Impostazioni salva tutti i figli in un file.
 
 ## Pubblicarla con GitHub Pages
 
@@ -43,6 +55,9 @@ I contenuti sono in file JavaScript semplici da modificare:
 | `js/data-events.js` | eventi, luoghi e fonti (ricordati di aggiornare `EVENTS_UPDATED`) |
 | `js/data-health.js` | percorso allergeni, bilanci, vaccinazioni, emergenze, libri e filastrocche |
 | `js/data-growth.js` | standard di crescita OMS 0-24 mesi (non modificare) |
+| `js/data-months.js` | guida mese per mese |
+| `js/dish-art.js` | illustrazioni delle ricette |
+| `sync/piccoli-passi-sync.gs` | servizio di condivisione (Google Apps Script); `js/sync-script.js` ne contiene una copia per il pulsante «Copia il codice» |
 
 Dopo una modifica, aumenta il numero in `CACHE` dentro `sw.js` (es. `piccoli-passi-v2`), così i telefoni scaricano la nuova versione.
 

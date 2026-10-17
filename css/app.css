@@ -415,3 +415,8 @@ details[data-care] summary { align-items: flex-start; }
 .dish img { aspect-ratio: 4 / 3; object-fit: cover; }
 .dish-lbl { font-size: 10px; fill: #8A7464; font-weight: 700; font-family: inherit; letter-spacing: .04em; text-transform: uppercase; }
 .dish-cap { margin: 4px 0 0; }
+
+/* Condivisione */
+.invite-box { width: 100%; min-height: 150px; font-size: .85rem; }
+.steps.small li { font-size: .9rem; }
+code { font-size: .85em; background: var(--surface-2); padding: 1px 5px; border-radius: 6px; }
