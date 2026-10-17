@@ -110,11 +110,11 @@
       body = `<p>Aggiungi Piccoli Passi alla schermata Home: si aprirà come un'app e funzionerà anche senza internet.</p>
         <div class="btn-row"><button class="btn" data-act="install">📲 Installa l'app</button>${force ? "" : `<button class="btn ghost" data-act="dismiss-install">Più tardi</button>`}</div>`;
     } else if (isIOS) {
-      body = `<p><b>Su iPhone (Safari):</b> tocca il pulsante <b>Condividi</b> <span aria-hidden="true">⬆️</span> in basso, poi <b>«Aggiungi alla schermata Home»</b>.</p>
+      body = `<p><b>Su iPhone:</b> tocca il pulsante <b>Condividi</b> <span aria-hidden="true">⬆️</span> (in Safari è in basso, in Chrome in alto a destra, nella barra dell'indirizzo), poi <b>«Aggiungi alla schermata Home»</b>.</p>
         ${force ? "" : `<button class="btn ghost small" data-act="dismiss-install">Ok, capito</button>`}`;
     } else {
       body = `<p><b>Su Android (Chrome):</b> apri il menu <b>⋮</b> in alto a destra e scegli <b>«Installa app»</b> o <b>«Aggiungi a schermata Home»</b>.</p>
-        <p><b>Su iPhone (Safari):</b> pulsante <b>Condividi</b> ⬆️ → <b>«Aggiungi alla schermata Home»</b>.</p>
+        <p><b>Su iPhone (Safari o Chrome):</b> pulsante <b>Condividi</b> ⬆️ → <b>«Aggiungi alla schermata Home»</b>.</p>
         ${force ? "" : `<button class="btn ghost small" data-act="dismiss-install">Ok, capito</button>`}`;
     }
     return `<div class="card tint-blue"><div class="card-kicker">📲 Installa sul telefono</div>${body}</div>`;

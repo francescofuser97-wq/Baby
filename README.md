@@ -27,7 +27,7 @@ Se preferisci tenere il repository privato, puoi collegarlo gratis a Netlify o C
 ## Installarla sul telefono
 
 - **Android (Chrome)**: apri il link → menu **⋮** → **Installa app** (o «Aggiungi a schermata Home»).
-- **iPhone (Safari)**: apri il link → pulsante **Condividi** ⬆️ → **Aggiungi alla schermata Home**.
+- **iPhone (Safari o Chrome)**: apri il link → pulsante **Condividi** ⬆️ (in Safari in basso, in Chrome in alto a destra) → **Aggiungi alla schermata Home**.
 
 ## Aggiornare i contenuti
 

@@ -25,7 +25,7 @@ window.GUIDE = [
 <div class="note">Il bilancio di salute dei 6 mesi dal pediatra è il momento ideale per decidere insieme come partire.</div>`
   },
   {
-    id: "misto", e: "🥄✋", t: "L'approccio misto",
+    id: "misto", e: "🥄", t: "L'approccio misto",
     sub: "Pappe e pezzetti insieme, senza fretta",
     html: `
 <p>Avete scelto un approccio <strong>misto</strong>: unisce la tranquillità delle pappe al cucchiaino con l'autonomia dei pezzetti da prendere con le mani (come nell'autosvezzamento).</p>

@@ -354,3 +354,13 @@ label.field small { display: block; margin-top: 6px; }
 .check .title { display: block; font-weight: 700; }
 .check .when { display: block; font-size: .82rem; color: var(--muted); }
 .check .detail { display: block; font-size: .875rem; margin-top: 2px; }
+
+/* Le icone restano sempre dentro il loro riquadro */
+.big-emoji, .datebox, .quick a span, .segmented .se { overflow: hidden; }
+.big-emoji { font-size: 1.8rem; line-height: 1; }
+
+/* Più contrasto: segmento selezionato e allergeni non ancora introdotti */
+.segmented button.on { background: var(--primary-soft); color: var(--ink); box-shadow: none; }
+.allergen b { filter: grayscale(1); opacity: .8; }
+.allergen { color: var(--ink); opacity: .75; }
+.allergen.on { opacity: 1; }
