@@ -182,7 +182,7 @@ button.card { width: 100%; text-align: left; cursor: pointer; font: inherit; }
 
 label.field { display: block; margin-bottom: 14px; font-weight: 600; }
 label.field span { display: block; margin-bottom: 6px; }
-input[type=text], input[type=date], input[type=search], input[type=url], textarea, select {
+input:not([type=checkbox]):not([type=radio]):not([type=file]), textarea, select {
   width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   min-height: 46px;
 }
@@ -316,3 +316,41 @@ details.group[open] summary::after { transform: rotate(90deg); }
 .tel { white-space: nowrap; font-size: .95rem; }
 .rhyme { white-space: pre-line; font-size: 1.02rem; line-height: 1.6; margin: 0 0 8px; }
 .tabbar a { font-size: .68rem; }
+
+/* ---------- Ritocchi grafici (iPhone e schermi stretti) ---------- */
+/* Safari su iPhone dà ai campi data/ora una larghezza propria: li riportiamo dentro il riquadro */
+input[type=date], input[type=time] {
+  -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%;
+  text-align: left; line-height: 1.3;
+}
+input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+input::-webkit-calendar-picker-indicator { opacity: .6; }
+select {
+  -webkit-appearance: none; appearance: none; padding-right: 40px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+  background-size: 6px 6px; background-repeat: no-repeat;
+}
+label.field small { display: block; margin-top: 6px; }
+
+/* Segmenti: icona sopra, testo sotto, sempre su una riga */
+.segmented button { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.2; white-space: nowrap; font-size: .82rem; padding: 7px 2px; min-width: 0; }
+.segmented .se { font-size: 1.15rem; line-height: 1.2; }
+
+/* Riquadro data "in corso" */
+.datebox.live small { font-size: .6rem; letter-spacing: 0; }
+.datebox.live b { font-size: 1rem; }
+
+/* Pulsanti di chiamata */
+.call { display: flex; align-items: center; gap: 12px; padding: 12px; }
+.call h3 { font-size: 1rem; margin: 0; }
+.call .meta { font-size: .82rem; color: var(--muted); }
+.call .num { display: inline-block; margin-top: 4px; font-weight: 800; font-size: 1rem; color: var(--ink); }
+.call .dial { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--green-soft); font-size: 1.2rem; }
+.call.sos .num, .call.sos .meta { color: #fff; }
+.call.sos .dial { background: rgba(255, 255, 255, .22); }
+
+/* Liste di controllo dell'agenda */
+.check .title { display: block; font-weight: 700; }
+.check .when { display: block; font-size: .82rem; color: var(--muted); }
+.check .detail { display: block; font-size: .875rem; margin-top: 2px; }

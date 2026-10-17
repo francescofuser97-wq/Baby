@@ -81,6 +81,7 @@
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
   }
 
+  const segLabel = l => l.replace(/^(\S+)\s+/, '<span class="se" aria-hidden="true">$1</span>');
   const mapsUrl = q => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
 
   /* ---------------- Sheet (pannello dal basso) ---------------- */
@@ -501,7 +502,7 @@
 
   function viewPlay() {
     const m = ageM();
-    const seg = (v, label) => `<button class="${ui.playTab === v ? "on" : ""}" data-act="set" data-k="playTab" data-v="${v}">${label}</button>`;
+    const seg = (v, label) => `<button class="${ui.playTab === v ? "on" : ""}" data-act="set" data-k="playTab" data-v="${v}">${segLabel(label)}</button>`;
     let body = "";
     if (ui.playTab === "giochi") {
       let list = ui.aAll ? ACTIVITIES.slice().sort((x, y) => x.min - y.min) : activitiesForAge(m);
@@ -590,7 +591,7 @@
   }
 
   function dateBox(ev) {
-    if (isOngoing(ev)) return `<div class="datebox"><b>●</b><small>in corso</small></div>`;
+    if (isOngoing(ev)) return `<div class="datebox live"><b>●</b><small>in corso</small></div>`;
     const d = parseISO(ev.start);
     return `<div class="datebox"><b>${d.getDate()}</b><small>${MONTHS[d.getMonth()]}${d.getFullYear() !== today0().getFullYear() ? " " + String(d.getFullYear()).slice(2) : ""}</small></div>`;
   }
@@ -618,7 +619,7 @@
   }
 
   function viewEvents() {
-    const seg = (v, label) => `<button class="${ui.evTab === v ? "on" : ""}" data-act="set" data-k="evTab" data-v="${v}">${label}</button>`;
+    const seg = (v, label) => `<button class="${ui.evTab === v ? "on" : ""}" data-act="set" data-k="evTab" data-v="${v}">${segLabel(label)}</button>`;
     const kmChips = `<div class="chips">${[[15, "Entro 15 km"], [30, "Entro 30 km"], [50, "Entro 50 km"], [0, "Tutti"]]
       .map(([v, l]) => `<button class="chip ${evKm === v ? "on" : ""}" data-act="set-km" data-v="${v}">${l}</button>`).join("")}</div>`;
     const staleDays = daysBetween(parseISO(EVENTS_UPDATED), today0());
@@ -889,9 +890,10 @@
       const d = health[id];
       const soon = !d && due && daysBetween(t, due) <= 45 && daysBetween(t, due) >= -60;
       return `<label class="check"><input type="checkbox" data-act="h-toggle" data-id="${id}" ${d ? "checked" : ""}>
-        <span class="grow"><b>${esc(title)}</b>${due ? ` <span class="small muted">· ${dueM < 72 ? "intorno al " + fmt(due, { day: "numeric", month: "long", year: "numeric" }) : "verso i 6 anni"}</span>` : ""}
+        <span class="grow"><span class="title">${esc(title)}</span>
+        ${due ? `<span class="when">${dueM < 72 ? "Intorno al " + fmt(due, { day: "numeric", month: "long", year: "numeric" }) : "Verso i 6 anni"}</span>` : ""}
         ${d ? `<span class="tag green">fatto · ${fmt(parseISO(d), { day: "numeric", month: "short" })}</span>` : soon ? `<span class="tag peach">in arrivo</span>` : ""}
-        <br><span class="small">${detail}</span></span></label>`;
+        <span class="detail">${detail}</span></span></label>`;
     };
     return `
       <button class="btn block" data-act="ap-add">➕ Aggiungi appuntamento</button>
@@ -952,7 +954,7 @@
   }
 
   function viewHealth() {
-    const seg = (v, label) => `<button class="${ui.healthTab === v ? "on" : ""}" data-act="set" data-k="healthTab" data-v="${v}">${label}</button>`;
+    const seg = (v, label) => `<button class="${ui.healthTab === v ? "on" : ""}" data-act="set" data-k="healthTab" data-v="${v}">${segLabel(label)}</button>`;
     const body = ui.healthTab === "crescita" ? viewGrowth() : ui.healthTab === "domande" ? viewQuestions() : viewAgenda();
     return `<a class="card list-card" href="#/emergenze" style="background:var(--danger-soft);border-color:transparent">
         <div class="big-emoji">🆘</div><div class="grow"><h3>Emergenze</h3><div class="meta">Numeri utili, soffocamento, febbre, pronto soccorso</div></div><span class="muted">›</span></a>
@@ -961,8 +963,9 @@
 
   /* ---------------- Emergenze ---------------- */
   function viewEmergency() {
-    const callBtn = (t, sub, tel, show, e, main) => `<a class="card list-card ${main ? "sos" : ""}" href="tel:${esc(String(tel).replace(/[^\d+]/g, ""))}">
-      <div class="big-emoji">${e}</div><div class="grow"><h3>${esc(t)}</h3><div class="meta">${esc(sub)}</div></div><b class="tel">📞 ${esc(show || tel)}</b></a>`;
+    const callBtn = (t, sub, tel, show, e, main) => `<a class="card call ${main ? "sos" : ""}" href="tel:${esc(String(tel).replace(/[^\d+]/g, ""))}">
+      <div class="big-emoji">${e}</div><div class="grow" style="min-width:0"><h3>${esc(t)}</h3>${sub ? `<div class="meta">${esc(sub)}</div>` : ""}<span class="num">${esc(show || tel)}</span></div>
+      <span class="dial" aria-hidden="true">📞</span></a>`;
     const c = contacts;
     return `
       ${EMERGENCY_NUMBERS.filter(n => n.main).map(n => callBtn(n.t, n.sub, n.tel, n.show, n.e, true)).join("")}
