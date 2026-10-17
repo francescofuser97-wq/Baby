@@ -158,3 +158,88 @@ window.RHYMES = [
   { min: 12, max: 48, t: "Bella lavanderina", g: "Fate i gesti insieme: lavare, saltare, girare.", txt: "Bella lavanderina\nche lava i fazzoletti\nper i poveretti\ndella città.\nFai un salto,\nfanne un altro,\nfai la giravolta,\nfalla un'altra volta,\nguarda in su,\nguarda in giù,\ndai un bacio a chi vuoi tu!" },
   { min: 18, max: 60, t: "Ambarabà ciccì coccò", g: "La conta più famosa: perfetta da recitare battendo il ritmo.", txt: "Ambarabà ciccì coccò,\ntre civette sul comò\nche facevano l'amore\ncon la figlia del dottore.\nIl dottore si ammalò:\nambarabà ciccì coccò!" }
 ];
+
+/* Guide pratiche di cura quotidiana ("Come si fa").
+   videos: video scelti (id YouTube, titolo, fonte); q: ricerca suggerita su YouTube. */
+window.CARE_GUIDES = [
+  {
+    id: "lavaggi-nasali", e: "💧", t: "Lavaggi nasali",
+    sub: "Con il raffreddore, per liberare il nasino",
+    q: "lavaggi nasali neonato pediatra",
+    videos: [{ id: "-uwx2DE2ukE", t: "Lavaggi nasali del neonato: un tutorial per i genitori", src: "Pediatra, Centro Medico Santagostino" }],
+    html: `
+<h3>Cosa serve</h3>
+<ul><li>Soluzione fisiologica (cloruro di sodio 0,9%) in fialette monodose, oppure una siringa da 5-10 ml <b>senza ago</b>.</li><li>Fazzoletti o una salvietta.</li><li>Soluzione a temperatura ambiente (non fredda).</li></ul>
+<h3>Come si fa</h3>
+<ol class="steps">
+<li>Sdraia il bimbo sulla schiena con la <b>testa girata di lato</b>, oppure su un fianco. Tieni ferma la testa con delicatezza.</li>
+<li>Appoggia la punta della fialetta all'ingresso della <b>narice che sta in alto</b>.</li>
+<li>Spremi con un gesto deciso (2-5 ml): il liquido entra e esce dall'altra narice, portando via il muco.</li>
+<li>Rimettilo seduto, pulisci il nasino e coccolalo.</li>
+<li>Gira la testa dall'altro lato e ripeti nell'altra narice.</li>
+</ol>
+<h3>Consigli</h3>
+<ul>
+<li>Fallo <b>prima</b> della poppata e della nanna, non subito dopo mangiato (potrebbe rigurgitare).</li>
+<li>Con il raffreddore si può ripetere più volte al giorno.</li>
+<li>All'inizio piangerà: è normale, il lavaggio non fa male. Con l'abitudine diventa più facile.</li>
+<li>Se ha febbre alta, respira a fatica o ha mal d'orecchio, senti il pediatra.</li>
+</ul>`
+  },
+  {
+    id: "febbre-misurare", e: "🌡️", t: "Misurare la febbre",
+    sub: "Termometro, valori e quando chiamare",
+    q: "come misurare la febbre al neonato pediatra",
+    videos: [],
+    html: `
+<ol class="steps">
+<li>Usa un <b>termometro digitale</b> sotto l'ascella: asciuga la pelle, metti la punta al centro dell'ascella e tieni il braccino chiuso contro il corpo.</li>
+<li>Aspetta il segnale acustico e leggi il valore.</li>
+<li>I termometri a infrarossi (fronte o orecchio) sono comodi ma meno precisi nei lattanti: in caso di dubbio ricontrolla sotto l'ascella.</li>
+</ol>
+<ul>
+<li>Sotto l'ascella si parla di febbre <b>da 37,5 °C</b> in su.</li>
+<li><b>Sotto i 3 mesi</b> una febbre da 38 °C in su va sempre valutata subito dal pediatra o in pronto soccorso.</li>
+<li>Più del numero conta come sta: se beve, gioca e si consola, di solito si può aspettare il pediatra.</li>
+</ul>
+<p>Trovi tutti i segnali d'allarme nella sezione <a href="#/emergenze">Emergenze</a>.</p>`
+  },
+  {
+    id: "medicine", e: "💊", t: "Dare le medicine con la siringa",
+    sub: "Sciroppi e gocce senza sputi",
+    q: "come dare sciroppo con siringa al neonato",
+    videos: [],
+    html: `
+<ol class="steps">
+<li>Controlla la <b>dose in ml</b> indicata dal pediatra (spesso dipende dal peso) e usa solo il dosatore della confezione.</li>
+<li>Tieni il bimbo in braccio, <b>semiseduto</b>, mai sdraiato.</li>
+<li>Appoggia la siringa all'interno della <b>guancia</b>, di lato, non verso la gola.</li>
+<li>Spingi piano, poco alla volta, lasciandogli il tempo di deglutire.</li>
+<li>Dopo, offri il seno o un po' di latte o acqua.</li>
+</ol>
+<ul>
+<li>Non mescolare la medicina in tutto il biberon: se non lo finisce, non sai quanta ne ha presa.</li>
+<li>Lava il dosatore dopo ogni uso e annota l'orario, così non rischi doppie dosi.</li>
+</ul>`
+  },
+  {
+    id: "unghie", e: "✂️", t: "Tagliare le unghie",
+    sub: "Senza paura, anche mentre dorme",
+    q: "come tagliare le unghie al neonato",
+    videos: [],
+    html: `
+<ol class="steps">
+<li>Usa <b>forbicine a punta arrotondata</b> o un tagliaunghie per neonati; nei primi mesi va benissimo anche una limetta morbida.</li>
+<li>Il momento migliore: mentre <b>dorme</b> o dopo il bagnetto, quando le unghie sono più morbide.</li>
+<li>Tieni il ditino e premi un po' il polpastrello per allontanarlo dall'unghia.</li>
+<li>Mani: segui la forma arrotondata del dito. Piedi: taglia <b>dritto</b>.</li>
+</ol>
+<p>Se tagli un pochino la pelle e esce una goccia di sangue, premi con una garza pulita: si ferma in fretta.</p>`
+  }
+];
+
+/* Video scelti per le emergenze */
+window.EMERGENCY_VIDEOS = [
+  { id: "d7088oX4VKc", t: "Manovre salvavita pediatriche", src: "Croce Rossa Italiana" },
+  { id: "uwo8RleF2GY", t: "Lattante (0-12 mesi): manovre di disostruzione delle vie aeree", src: "Video formativo" }
+];

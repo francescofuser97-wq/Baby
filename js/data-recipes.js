@@ -29,7 +29,8 @@ window.RECIPES = [
     pappa: "Le prime volte bastano pochi cucchiaini: è una scoperta, non un pasto da finire. Puoi dare al bimbo un cucchiaino già carico da tenere in mano.",
     pezzi: "Accanto alla pappa metti un bastoncino morbido di carota o zucchina del brodo: così esplora anche con le mani.",
     tip: "Scegli un momento sereno, quando non ha troppa fame né sonno. Se rifiuta, nessun problema: riprova nei giorni seguenti.",
-    store: "Meglio prepararla al momento."
+    store: "Meglio prepararla al momento.",
+    videos: [{ id: "5ioVNLjey58", t: "Come si fa lo svezzamento: preparare la prima pappa", src: "Tutorial video" }]
   },
   {
     id: "zucca-mais", t: "Pappa di zucca con crema di mais e tapioca", e: "🎃", m: 6, cat: "pappa", min: 30, seasons: ["autunno", "inverno"], al: [],

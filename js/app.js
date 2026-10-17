@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "2.0.0";
+  const VERSION = "2.1.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -14,7 +14,7 @@
   };
   // Dati di ogni figlio (salvati come "k.<id>.<chiave>") e dati in comune per la famiglia
   const KID_KEYS = ["foods", "ready", "done", "growth", "health", "appts", "questions"];
-  const SHARED_KEYS = ["favs", "myEvents", "contacts", "evKm", "theme"];
+  const SHARED_KEYS = ["favs", "myEvents", "contacts", "evKm", "theme", "videos"];
   let kids = raw.get("kids", null);
   let activeKid = raw.get("activeKid", null);
   if (!kids) {
@@ -62,6 +62,7 @@
   let evKm = S.get("evKm", 50);
   let theme = S.get("theme", "auto");
   let contacts = S.get("contacts", {});
+  let videos = S.get("videos", {});
   function switchKid(id) {
     activeKid = id; raw.set("activeKid", id); loadKid();
   }
@@ -471,6 +472,7 @@
       <div class="card tint-yellow"><div class="card-kicker">💡 Consiglio</div><p>${esc(r.tip)}</p></div>
       <div class="card"><div class="card-kicker">🧊 Conservazione</div><p>${esc(r.store)}</p></div>
       ${r.al.length ? `<div class="card small">Contiene allergeni: se è la prima volta, offrine poco, a pranzo, e osserva il bimbo. <a href="#/sezione/allergeni">Come introdurre gli allergeni ›</a></div>` : ""}
+      ${videoBlock("r:" + r.id, r.videos, "ricetta svezzamento " + r.t.replace(/[«»()]/g, ""))}
       <p class="disclaimer">Niente sale, zucchero o miele nel primo anno. Le quantità sono indicative.</p>`;
   }
 
@@ -649,7 +651,8 @@
       <div class="card"><h2>🧺 Cosa serve</h2><ul>${a.mat.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>
       <div class="card"><h2>🎈 Come si fa</h2><ol class="steps">${a.how.map(s => `<li>${esc(s)}</li>`).join("")}</ol></div>
       <div class="card tint-blue"><div class="card-kicker">🌱 Perché fa bene</div><p>${esc(a.why)}</p></div>
-      ${a.safe ? `<div class="card" style="background:var(--danger-soft);border-color:transparent"><div class="card-kicker">🛡️ Sicurezza</div><p>${esc(a.safe)}</p></div>` : ""}`;
+      ${a.safe ? `<div class="card" style="background:var(--danger-soft);border-color:transparent"><div class="card-kicker">🛡️ Sicurezza</div><p>${esc(a.safe)}</p></div>` : ""}
+      ${videoBlock("a:" + a.id, a.videos, a.t.replace(/[«»…]/g, "") + " gioco neonato")}`;
   }
 
   /* ---------------- Eventi ---------------- */
@@ -1058,10 +1061,10 @@
 
   function viewHealth() {
     const seg = (v, label) => `<button class="${ui.healthTab === v ? "on" : ""}" data-act="set" data-k="healthTab" data-v="${v}">${segLabel(label)}</button>`;
-    const body = ui.healthTab === "crescita" ? viewGrowth() : ui.healthTab === "domande" ? viewQuestions() : viewAgenda();
+    const body = ui.healthTab === "crescita" ? viewGrowth() : ui.healthTab === "domande" ? viewQuestions() : ui.healthTab === "cura" ? viewCare() : viewAgenda();
     return `<a class="card list-card" href="#/emergenze" style="background:var(--danger-soft);border-color:transparent">
         <div class="big-emoji">🆘</div><div class="grow"><h3>Emergenze</h3><div class="meta">Numeri utili, soffocamento, febbre, pronto soccorso</div></div><span class="muted">›</span></a>
-      <div class="segmented">${seg("agenda", "📅 Agenda")}${seg("crescita", "📈 Crescita")}${seg("domande", "❓ Domande")}</div>${body}`;
+      <div class="segmented">${seg("agenda", "📅 Agenda")}${seg("crescita", "📈 Crescita")}${seg("domande", "❓ Domande")}${seg("cura", "🧴 Come si fa")}</div>${body}`;
   }
 
   /* ---------------- Emergenze ---------------- */
@@ -1089,6 +1092,7 @@
       <div class="section-title"><h2>🏥 Pronto soccorso vicini</h2></div>
       ${HOSPITALS.map(h => `<a class="card list-card" href="${mapsUrl(h.q)}" target="_blank" rel="noopener"><div class="big-emoji">🏥</div><div class="grow"><h3>${esc(h.t)}</h3><div class="meta">~${h.km} km · apri nelle mappe</div></div><span class="muted">›</span></a>`).join("")}
       <div class="section-title"><h2>📖 Cosa fare</h2></div>
+      ${videoBlock("emergenze", EMERGENCY_VIDEOS, "disostruzione pediatrica lattante croce rossa")}
       ${EMERGENCY_GUIDE.map((g, i) => `<details class="group" ${i === 0 ? "open" : ""}><summary>${g.e} ${esc(g.t)}</summary><div class="prose" style="padding:0 16px 14px">${g.html}</div></details>`).join("")}
       <div class="note small">Queste indicazioni sono un promemoria e <b>non sostituiscono un corso di disostruzione e rianimazione pediatrica</b>: fatelo, anche con i nonni. In caso di dubbio chiama sempre il <b>112</b>.</div>`;
   }
@@ -1104,6 +1108,52 @@
       <div class="section-title"><h2>🎵 Filastrocche e ninne nanne</h2></div>
       ${rhymes.map(r => `<details class="group"><summary>${esc(r.t)} <span class="small muted" style="margin-left:auto;margin-right:8px">${r.min}+ mesi</span></summary>
         <div style="padding:0 16px 14px"><p class="rhyme">${esc(r.txt)}</p><p class="small muted" style="margin:0">👐 ${esc(r.g)}</p></div></details>`).join("")}`;
+  }
+
+  /* ---------------- Video (YouTube) ---------------- */
+  // Estrae l'id di 11 caratteri da un link YouTube (watch, youtu.be, shorts, embed, live)
+  function ytId(url) {
+    const m = String(url || "").trim().match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/|v\/))([\w-]{11})/);
+    return m ? m[1] : /^[\w-]{11}$/.test(String(url || "").trim()) ? String(url).trim() : null;
+  }
+  const ytSearch = q => "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
+  function videoBlock(key, curated, query) {
+    const mine = videos[key] || [];
+    const row = (v, own) => `<div class="vid-row">
+      <button class="vid-thumb" data-act="play" data-id="${esc(v.id)}" data-t="${esc(v.t || "")}" aria-label="Guarda ${esc(v.t || "il video")}">
+        <img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span class="vid-play">▶</span></button>
+      <div class="grow" style="min-width:0"><b class="small">${esc(v.t || "Video")}</b>${v.src ? `<div class="small muted">${esc(v.src)}</div>` : own ? `<div class="small muted">Aggiunto da te</div>` : ""}
+        ${own ? `<button class="btn ghost small" style="margin-top:6px" data-act="vid-del" data-key="${esc(key)}" data-id="${esc(v.id)}">Rimuovi</button>` : ""}</div></div>`;
+    return `<div class="card"><div class="card-kicker">🎬 Video</div>
+      ${(curated || []).map(v => row(v, false)).join("")}${mine.map(v => row(v, true)).join("")}
+      ${!(curated || []).length && !mine.length ? `<p class="small muted">Ancora nessun video. Cercane uno su YouTube e aggiungilo qui: poi lo guardi direttamente nell'app.</p>` : ""}
+      <div class="btn-row">
+        ${query ? `<a class="btn ghost small" href="${ytSearch(query)}" target="_blank" rel="noopener">🔎 Cerca su YouTube</a>` : ""}
+        <button class="btn ghost small" data-act="vid-add" data-key="${esc(key)}">➕ Aggiungi un video</button>
+      </div>
+      ${(curated || []).length ? `<p class="small muted" style="margin:8px 0 0">I video sono di autori esterni: non sostituiscono i consigli del pediatra.</p>` : ""}</div>`;
+  }
+  function openVideo(id, title) {
+    openSheet(`<h2 style="font-size:1rem">${esc(title || "Video")}</h2>
+      <div class="vid-frame"><iframe src="https://www.youtube-nocookie.com/embed/${esc(id)}?rel=0&playsinline=1&modestbranding=1" title="${esc(title || "Video")}"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>
+      <p class="small muted">Serve la connessione a internet. Se il video non parte, alcuni autori non permettono di vederlo fuori da YouTube:</p>
+      <div class="btn-row"><a class="btn ghost" href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener">▶️ Apri in YouTube</a><button class="btn" data-act="close" style="flex:1">Chiudi</button></div>`);
+  }
+  function openAddVideo(key) {
+    openSheet(`<h2>➕ Aggiungi un video</h2>
+      <form id="videoForm" data-key="${esc(key)}">
+        <label class="field"><span>Link del video YouTube</span><input type="text" inputmode="url" autocapitalize="off" autocorrect="off" name="url" required autofocus placeholder="https://youtu.be/…"></label>
+        <label class="field"><span>Titolo (facoltativo)</span><input type="text" name="t" placeholder="Es. Pancake di banana"></label>
+        <p class="small muted">Su YouTube tocca <b>Condividi → Copia link</b> e incollalo qui.</p>
+        <div class="btn-row"><button class="btn" type="submit" style="flex:1">Salva</button><button class="btn ghost" type="button" data-act="close">Annulla</button></div>
+      </form>`);
+  }
+
+  function viewCare() {
+    return `<p class="small muted">Piccole cure di tutti i giorni, spiegate passo passo.</p>
+      ${CARE_GUIDES.map(g => `<details class="group"${ui.careOpen === g.id ? " open" : ""} data-care="${g.id}"><summary><span>${g.e} ${esc(g.t)}<br><span class="small muted" style="font-weight:500">${esc(g.sub)}</span></span></summary>
+        <div style="padding:0 16px 14px"><div class="prose">${g.html}</div>${videoBlock("care:" + g.id, g.videos, g.q)}</div></details>`).join("")}`;
   }
 
   /* ---------------- Impostazioni ---------------- */
@@ -1168,6 +1218,12 @@
           switchKid(kids[0].id); toast("Profilo eliminato"); location.hash = "#/oggi"; render(false);
         }
         break;
+      case "play": openVideo(t.dataset.id, t.dataset.t); break;
+      case "vid-add": openAddVideo(t.dataset.key); break;
+      case "vid-del":
+        videos[t.dataset.key] = (videos[t.dataset.key] || []).filter(v => v.id !== t.dataset.id);
+        if (!videos[t.dataset.key].length) delete videos[t.dataset.key];
+        S.set("videos", videos); render(true); break;
       case "set-theme": theme = t.dataset.v; S.set("theme", theme); applyTheme(); render(true); break;
       case "set-km": evKm = Number(t.dataset.v); S.set("evKm", evKm); render(true); break;
       case "set-sex": settings.sex = t.dataset.v; S.set("settings", settings); render(true); break;
@@ -1238,7 +1294,7 @@
         if (confirm("Vuoi davvero cancellare tutti i dati (diario, preferiti, eventi)?")) {
           try { Object.keys(localStorage).filter(k => k.startsWith("pp.")).forEach(k => localStorage.removeItem(k)); } catch (err) { /* ignore */ }
           kids = []; raw.set("kids", kids); switchKid(null);
-          favs = {}; myEvents = []; contacts = {};
+          favs = {}; myEvents = []; contacts = {}; videos = {};
           location.hash = "#/oggi"; render(false);
         }
         break;
@@ -1255,7 +1311,8 @@
   // Ricorda quali gruppi del diario sono aperti
   document.addEventListener("toggle", e => {
     const d = e.target;
-    if (d.matches && d.matches("details.group") && !ui.fQ) ui.openCats[d.dataset.cat] = d.open;
+    if (d.matches && d.matches("details.group") && !ui.fQ && d.dataset.cat) ui.openCats[d.dataset.cat] = d.open;
+    if (d.matches && d.matches("details[data-care]") && d.open) ui.careOpen = d.dataset.care;
   }, true);
 
   document.addEventListener("change", e => {
@@ -1278,7 +1335,7 @@
           newKids.forEach(k => KID_KEYS.forEach(key => { const v = (kidData[k.id] || {})[key]; if (v != null) raw.set("k." + k.id + "." + key, v); }));
           SHARED_KEYS.forEach(k => { if (data[k] != null) raw.set(k, data[k]); });
           switchKid(kids.some(k => k.id === data.activeKid) ? data.activeKid : (kids[0] || {}).id || null);
-          favs = raw.get("favs", {}); myEvents = raw.get("myEvents", []); contacts = raw.get("contacts", {});
+          favs = raw.get("favs", {}); myEvents = raw.get("myEvents", []); contacts = raw.get("contacts", {}); videos = raw.get("videos", {});
           evKm = raw.get("evKm", 50); theme = raw.get("theme", "auto"); applyTheme();
           toast("Dati importati ✅"); render(false);
         } catch (err) { toast("File non valido"); }
@@ -1301,6 +1358,12 @@
       if (f.id === "welcomeForm") switchKid(activeKid);
       if (f.id === "settingsForm") toast("Salvato ✅");
       location.hash = "#/oggi"; render(false);
+    } else if (f.id === "videoForm") {
+      const id = ytId(fd.get("url"));
+      if (!id) { toast("Non riconosco il link: copialo da YouTube con «Condividi»"); return; }
+      const key = f.dataset.key;
+      videos[key] = (videos[key] || []).filter(v => v.id !== id).concat([{ id, t: String(fd.get("t") || "").trim() }]);
+      S.set("videos", videos); closeSheet(); toast("Video aggiunto 🎬"); render(true);
     } else if (f.id === "kidForm") {
       activeKid = null;
       S.set("settings", { name: String(fd.get("name") || "").trim(), birth: fd.get("birth"), sex: fd.get("sex") || "m" });
