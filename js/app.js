@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "2.1.0";
+  const VERSION = "2.2.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -175,9 +175,9 @@
   }
 
   /* ---------------- Router ---------------- */
-  const TITLES = { oggi: "Piccoli Passi", ricette: "Ricette", ricetta: "Ricetta", guida: "Guida allo svezzamento", sezione: "Guida", diario: "Diario dei cibi", giochi: "Giochi e crescita", attivita: "Gioco", eventi: "Eventi e luoghi", impostazioni: "Impostazioni", allergeni: "Percorso allergeni", salute: "Salute", emergenze: "Emergenze" };
-  const PARENT = { ricetta: "#/ricette", sezione: "#/guida", diario: "#/guida", attivita: "#/giochi", impostazioni: "#/oggi", allergeni: "#/guida", emergenze: "#/salute" };
-  const TAB_OF = { ricetta: "ricette", sezione: "guida", diario: "guida", attivita: "giochi", allergeni: "guida", emergenze: "salute" };
+  const TITLES = { oggi: "Piccoli Passi", ricette: "Ricette", ricetta: "Ricetta", guida: "Guida allo svezzamento", sezione: "Guida", diario: "Diario dei cibi", giochi: "Giochi e crescita", attivita: "Gioco", eventi: "Eventi e luoghi", impostazioni: "Impostazioni", allergeni: "Percorso allergeni", salute: "Salute", emergenze: "Emergenze", mese: "Mese per mese" };
+  const PARENT = { ricetta: "#/ricette", sezione: "#/guida", diario: "#/guida", attivita: "#/giochi", impostazioni: "#/oggi", allergeni: "#/guida", emergenze: "#/salute", mese: "#/giochi" };
+  const TAB_OF = { ricetta: "ricette", sezione: "guida", diario: "guida", attivita: "giochi", allergeni: "guida", emergenze: "salute", mese: "giochi" };
 
   function parseRoute() {
     const h = location.hash.replace(/^#\/?/, "");
@@ -200,6 +200,7 @@
       case "allergeni": return viewAllergens();
       case "salute": return viewHealth();
       case "emergenze": return viewEmergency();
+      case "mese": return viewMonth(r.id);
       default: return viewToday();
     }
   }
@@ -218,6 +219,9 @@
     const r = parseRoute();
     const y = window.scrollY;
     app.innerHTML = viewHtml(r);
+    hydratePhotos();
+    const mc = app.querySelector("#monthChips"), mon = mc && mc.querySelector(".on");
+    if (mon) mc.scrollLeft = mon.offsetLeft - mc.clientWidth / 2 + mon.offsetWidth / 2;
     const tab = TAB_OF[r.view] || r.view;
     document.querySelectorAll(".tabbar a").forEach(a => a.classList.toggle("on", settings != null && a.dataset.tab === tab));
     document.querySelector(".tabbar").hidden = !settings;
@@ -373,6 +377,7 @@
         <h3>${ph.t}</h3>
         <p class="small">${ph.d}</p>
       </a>
+      ${monthTodayCard()}
 
       <div class="quick">
         <a href="#/salute"><span>🩺</span>Salute</a><a href="#/allergeni"><span>⚠️</span>Allergeni</a><a href="#/emergenze"><span>🆘</span>Emergenze</a>
@@ -458,11 +463,14 @@
     const m = ageM();
     return `
       <div class="article-hero">
-        <div class="emoji">${r.e}</div>
+        <figure class="dish" data-photo="r:${r.id}">${window.dishArt ? dishArt(r.id) : `<div class="emoji">${r.e}</div>`}</figure>
+        <p class="small muted dish-cap" data-photo-cap="r:${r.id}">Illustrazione indicativa: colore, consistenza e forma dei pezzi</p>
         <h1>${esc(r.t)}</h1>
         <div><span class="tag green">dai ${r.m} mesi</span><span class="tag">⏱ ${r.min} min</span><span class="tag">${RECIPE_CATS[r.cat]}</span>${r.seasons.length ? `<span class="tag peach">🍂 ${r.seasons.join(", ")}</span>` : ""}</div>
         ${r.al.length ? `<div style="margin-top:6px">${allergenTags(r.al)}</div>` : ""}
-        <div class="btn-row" style="justify-content:center"><button class="btn ghost small" data-act="fav" data-id="r:${r.id}">${fav ? "❤️ Nei preferiti" : "🤍 Aggiungi ai preferiti"}</button></div>
+        <div class="btn-row" style="justify-content:center"><button class="btn ghost small" data-act="fav" data-id="r:${r.id}">${fav ? "❤️ Nei preferiti" : "🤍 Aggiungi ai preferiti"}</button>
+          <label class="btn ghost small" style="cursor:pointer">📷 La tua foto<input type="file" accept="image/*" data-act="photo" data-key="r:${r.id}" hidden></label>
+          <button class="btn ghost small" data-act="photo-del" data-key="r:${r.id}" hidden>🗑️ Togli foto</button></div>
       </div>
       ${r.m > m && m >= 6 ? `<div class="note">Questa ricetta è pensata dai ${r.m} mesi: tienila per più avanti.</div>` : ""}
       <div class="card"><h2>🛒 Ingredienti</h2><ul>${r.ing.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>
@@ -614,7 +622,8 @@
         ${list.filter(a => ui.aAll || ui.aArea !== "tutte" || a !== todays).map(activityCard).join("") || `<div class="empty"><b>🧸</b>Nessun gioco con questi filtri.${m > 24 ? " I giochi dell'app sono pensati per i primi due anni: prova «Tutte le età»." : ""}</div>`}`;
     } else if (ui.playTab === "tappe") {
       const cur = MILESTONES.find(x => m >= x.min && m < x.max) || MILESTONES[m < 4 ? 0 : MILESTONES.length - 1];
-      body = `<p class="small muted">Sono indicazioni medie: ogni bambino ha i suoi tempi, e anche alcune settimane o mesi di differenza sono normali. Se qualcosa ti preoccupa, parlane con il pediatra.</p>
+      body = `<a class="card list-card tint-purple" href="#/mese"><div class="big-emoji">📆</div><div class="grow"><h3>Mese per mese</h3><div class="meta">Cosa aspettarsi e come affrontarlo: sonno, dentini, distacchi…</div></div><span class="muted">›</span></a>
+        <p class="small muted">Sono indicazioni medie: ogni bambino ha i suoi tempi, e anche alcune settimane o mesi di differenza sono normali. Se qualcosa ti preoccupa, parlane con il pediatra.</p>
         ${MILESTONES.map(x => `<div class="card ${x === cur ? "tint-green" : ""}">
           <div class="card-kicker">${x === cur ? "📍 Questa età · " : ""}${x.t}</div>
           <ul>${x.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>`).join("")}`;
@@ -1110,6 +1119,84 @@
         <div style="padding:0 16px 14px"><p class="rhyme">${esc(r.txt)}</p><p class="small muted" style="margin:0">👐 ${esc(r.g)}</p></div></details>`).join("")}`;
   }
 
+  /* ---------------- Mese per mese ---------------- */
+  const monthEntry = m => MONTH_GUIDE.find(e => m >= e.m && m <= e.to) || MONTH_GUIDE[MONTH_GUIDE.length - 1];
+  function monthTodayCard() {
+    const a = age();
+    if (!a || a.m > 24) return "";
+    const e = monthEntry(a.m);
+    return `<a class="card tint-purple" href="#/mese"><div class="card-kicker">📆 Il mese di ${name()} · ${esc(e.t)}</div>
+      <p class="small" style="margin-bottom:6px">${esc(e.intro)}</p>
+      <div>${e.items.map(it => `<span class="tag purple">${it.e} ${esc(it.t)}</span>`).join("")}</div></a>`;
+  }
+  function viewMonth(id) {
+    const m = ageM();
+    const cur = monthEntry(m);
+    const idx = id != null && id !== "" ? Math.max(0, Math.min(MONTH_GUIDE.length - 1, Number(id))) : MONTH_GUIDE.indexOf(cur);
+    const e = MONTH_GUIDE[idx];
+    const prev = MONTH_GUIDE[idx - 1], next = MONTH_GUIDE[idx + 1];
+    return `
+      <div class="chips" id="monthChips">${MONTH_GUIDE.map((x, i) => `<a class="chip ${i === idx ? "on" : ""}" href="#/mese/${i}" style="text-decoration:none">${x === cur ? "📍 " : ""}${esc(x.t.replace("Il primo mese", "0 mesi"))}</a>`).join("")}</div>
+      <div class="article-hero" style="padding-top:6px"><h1>${esc(e.t)}</h1><p class="muted">${esc(e.intro)}</p>
+        ${e === cur ? `<span class="tag purple">📍 L'età di ${name()}</span>` : ""}</div>
+      ${e.items.map(it => `<div class="card">
+        <h2 style="margin-bottom:8px">${it.e} ${esc(it.t)}</h2>
+        <div class="card-kicker">👀 Cosa aspettarsi</div><p>${esc(it.expect)}</p>
+        <div class="card-kicker">🤝 Come affrontarlo</div><p>${esc(it.how)}</p></div>`).join("")}
+      <div class="btn-row" style="justify-content:space-between">
+        ${prev ? `<a class="btn ghost small" href="#/mese/${idx - 1}">‹ ${esc(prev.t)}</a>` : "<span></span>"}
+        ${next ? `<a class="btn ghost small" href="#/mese/${idx + 1}">${esc(next.t)} ›</a>` : ""}
+      </div>
+      <p class="disclaimer">Sono tendenze medie: ogni bambino ha i suoi tempi. Per qualsiasi dubbio sul sonno, la crescita o lo sviluppo, parlane con il pediatra.</p>`;
+  }
+
+  /* ---------------- Foto delle ricette (salvate sul telefono) ---------------- */
+  const PhotoDB = (() => {
+    let dbp;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      const rq = indexedDB.open("piccoli-passi", 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore("photos");
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error);
+    }));
+    const tx = (mode, fn) => open().then(db => new Promise((res, rej) => {
+      const t = db.transaction("photos", mode);
+      const rq = fn(t.objectStore("photos"));
+      t.oncomplete = () => res(rq && rq.result);
+      t.onerror = () => rej(t.error);
+    }));
+    return { get: k => tx("readonly", st => st.get(k)), set: (k, v) => tx("readwrite", st => st.put(v, k)), del: k => tx("readwrite", st => st.delete(k)) };
+  })();
+  let photoUrls = [];
+  function hydratePhotos() {
+    photoUrls.forEach(u => URL.revokeObjectURL(u)); photoUrls = [];
+    app.querySelectorAll("[data-photo]").forEach(fig => {
+      const key = fig.dataset.photo;
+      PhotoDB.get(key).then(blob => {
+        if (!blob || !fig.isConnected) return;
+        const url = URL.createObjectURL(blob); photoUrls.push(url);
+        fig.innerHTML = `<img src="${url}" alt="La vostra foto del piatto">`;
+        const cap = app.querySelector(`[data-photo-cap="${key}"]`); if (cap) cap.textContent = "La vostra foto";
+        const del = app.querySelector(`[data-act="photo-del"][data-key="${key}"]`); if (del) del.hidden = false;
+      }).catch(() => { /* foto non disponibili */ });
+    });
+  }
+  function resizeImage(file, max) {
+    return new Promise((res, rej) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const k = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(b => (b ? res(b) : rej(new Error("foto"))), "image/jpeg", 0.82);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("foto")); };
+      img.src = url;
+    });
+  }
+
   /* ---------------- Video (YouTube) ---------------- */
   // Estrae l'id di 11 caratteri da un link YouTube (watch, youtu.be, shorts, embed, live)
   function ytId(url) {
@@ -1219,6 +1306,9 @@
         }
         break;
       case "play": openVideo(t.dataset.id, t.dataset.t); break;
+      case "photo-del":
+        if (confirm("Togliere la vostra foto e tornare all'illustrazione?")) PhotoDB.del(t.dataset.key).then(() => render(true)).catch(() => toast("Non riesco a togliere la foto"));
+        break;
       case "vid-add": openAddVideo(t.dataset.key); break;
       case "vid-del":
         videos[t.dataset.key] = (videos[t.dataset.key] || []).filter(v => v.id !== t.dataset.id);
@@ -1316,6 +1406,14 @@
   }, true);
 
   document.addEventListener("change", e => {
+    if (e.target.dataset && e.target.dataset.act === "photo" && e.target.files[0]) {
+      const key = e.target.dataset.key, file = e.target.files[0];
+      e.target.value = "";
+      toast("Salvo la foto…");
+      resizeImage(file, 1000).then(b => PhotoDB.set(key, b)).then(() => { toast("Foto salvata 📷"); render(true); })
+        .catch(() => toast("Non riesco a leggere questa foto"));
+      return;
+    }
     if (e.target.dataset && e.target.dataset.act === "import" && e.target.files[0]) {
       const reader = new FileReader();
       reader.onload = () => {
