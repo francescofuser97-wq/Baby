@@ -1367,6 +1367,7 @@
           <button class="btn" data-act="sync-invite">📨 Invita qualcuno</button>
           <button class="btn ghost" data-act="sync-now">🔄 Sincronizza ora</button>
         </div>
+        <button class="btn ghost block" data-act="sync-newfamily" style="margin-top:10px">🏠 Crea uno spazio per un'altra famiglia</button>
         <p class="small muted" style="margin:10px 0 0">Le foto dei piatti restano solo sul telefono che le ha scattate. Il codice di invito dà accesso a tutti i dati: mandalo solo a persone di fiducia.</p>
         <button class="btn danger small" data-act="sync-leave" style="margin-top:8px">Scollega questo telefono</button>
       </div>`;
@@ -1408,6 +1409,23 @@
       <button class="btn ghost block" data-act="close" style="margin-top:8px">Chiudi</button>`);
     sheet.dataset.invite = text;
   }
+  // Uno spazio nuovo e separato sullo stesso servizio Google: altro codice, altro file, nessun dato in comune
+  function openNewFamily() {
+    const c = raw.get("sync", null);
+    if (!c) return;
+    const code = "PP1-" + b64u(JSON.stringify({ u: c.url, k: randomKey() }));
+    const link = location.origin + location.pathname;
+    const text = "Ti ho preparato Piccoli Passi 🌱, un'app per seguire svezzamento, crescita e giochi del tuo bimbo.\n\n1) Apri l'app: " + link +
+      "\n2) Su iPhone aggiungila alla schermata Home e aprila da lì\n3) Tocca «Ho un codice di invito» e incolla questo codice:\n\n" + code +
+      "\n\nÈ uno spazio tutto vostro: non vedrete i nostri dati e noi non vedremo i vostri. Poi da Impostazioni potrai invitare anche il papà.";
+    openSheet(`<h2>🏠 Spazio per un'altra famiglia</h2>
+      <p class="small">Questo codice crea uno spazio <b>nuovo e separato</b>: chi lo usa parte da zero, non vede i vostri figli e voi non vedete i suoi. Poi potrà invitare a sua volta il partner o i nonni.</p>
+      <p class="small muted">I dati di quella famiglia vengono salvati in un file separato nel <b>tuo</b> Google Drive. Se preferisci che restino solo loro, possono attivare la condivisione con il loro account Google.</p>
+      <textarea readonly class="invite-box" id="inviteText">${esc(text)}</textarea>
+      <div class="btn-row">${navigator.share ? `<button class="btn" data-act="sync-share" style="flex:1">📤 Condividi</button>` : ""}<button class="btn ghost" data-act="sync-copy-invite" style="flex:1">📋 Copia</button></div>
+      <button class="btn ghost block" data-act="close" style="margin-top:8px">Chiudi</button>`);
+    sheet.dataset.invite = text;
+  }
   async function copyText(t) {
     try { await navigator.clipboard.writeText(t); return true; }
     catch (e) {
@@ -1428,7 +1446,7 @@
     closeSheet(); toast("Collegamento in corso…");
     const ok = await syncNow(false);
     location.hash = "#/oggi"; render(false);
-    toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato. Non ci sono ancora dati condivisi.") : "Non riesco a collegarmi: controlla la connessione e riprova da Impostazioni");
+    toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato! Ora inserisci il tuo bimbo per iniziare 🌱") : "Non riesco a collegarmi: controlla la connessione e riprova da Impostazioni");
   }
 
   /* ---------------- Impostazioni ---------------- */
@@ -1499,6 +1517,7 @@
       case "sync-join": openSyncJoin(""); break;
       case "sync-now": syncNow(true); break;
       case "sync-invite": openInvite(); break;
+      case "sync-newfamily": openNewFamily(); break;
       case "sync-copy-script": toast(await copyText(SYNC_SCRIPT) ? "Codice copiato 📋 Incollalo in Apps Script" : "Non riesco a copiare: lo trovi nel file sync/piccoli-passi-sync.gs"); break;
       case "sync-copy-invite": toast(await copyText(sheet.dataset.invite || "") ? "Invito copiato 📋" : "Seleziona il testo e copialo"); break;
       case "sync-share":

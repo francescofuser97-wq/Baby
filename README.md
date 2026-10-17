@@ -26,6 +26,8 @@ In **Impostazioni → Condividi con la famiglia** l'app guida passo passo. In br
 
 I dati condivisi stanno in un file `piccoli-passi-….json` nel Drive di chi ha pubblicato lo script. Ogni telefono manda e riceve solo i dati cambiati; se due persone modificano lo stesso elemento vince la modifica più recente. Il codice di invito dà accesso ai dati: mandalo solo a persone di fiducia. Le foto dei piatti non vengono condivise.
 
+**Altre famiglie** (per esempio una cognata con la sua bimba): possono semplicemente installare l'app e usarla da sole, oppure attivare la condivisione con il loro account Google. In alternativa, da **Impostazioni → Crea uno spazio per un'altra famiglia** generi un codice per uno spazio nuovo e separato sul tuo servizio: loro non vedono i tuoi dati e tu non vedi i loro nell'app (il file però si trova nel tuo Drive).
+
 Resta anche il backup manuale: «Esporta/Importa» in Impostazioni salva tutti i figli in un file.
 
 ## Pubblicarla con GitHub Pages
