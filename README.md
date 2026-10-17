@@ -11,8 +11,10 @@ Web app installabile (PWA) per accompagnare lo svezzamento e la crescita del bam
 - **Emergenze** (🆘 in alto): numeri utili, pronto soccorso vicini, disostruzione, febbre, ingestioni, ustioni.
 - **Eventi**: eventi e luoghi a misura di bebè intorno a Montecchio Maggiore, con mappa, aggiunta al calendario ed eventi personali.
 
-Funziona offline. Nome, data di nascita, diario e preferiti restano **solo sul telefono**: nel codice non c'è nessun dato personale.
-Con «Esporta/Importa» (in Impostazioni) puoi copiare i dati sul telefono dell'altro genitore.
+**Più figli**: ogni figlio ha il suo profilo (selettore in alto con il nome). Diario, allergeni, crescita, agenda, giochi fatti e domande sono separati; preferiti, eventi, numeri di emergenza e tema sono in comune. L'agenda ha anche la vista «Tutta la famiglia».
+
+Funziona offline. Nomi, date di nascita, diario e preferiti restano **solo sul telefono**: nel codice non c'è nessun dato personale.
+Con «Esporta/Importa» (in Impostazioni) puoi copiare i dati, di tutti i figli, sul telefono dell'altro genitore.
 
 ## Pubblicarla con GitHub Pages
 

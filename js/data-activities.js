@@ -235,6 +235,24 @@ window.ACTIVITIES = [
     why: "Autonomia, manualità, nuovi sapori e la soddisfazione di aver aiutato."
   },
   {
+    id: "fratello-legge", t: "Il fratello grande «legge» al piccolo", e: "📖", min: 30, max: 120, area: "affetti", dur: "10 min",
+    mat: ["Un libro illustrato che il grande conosce bene"],
+    how: ["Fate sedere il grande sul divano, con il piccolo in braccio a un adulto accanto a lui.", "Il grande racconta la storia guardando le figure, anche se non sa ancora leggere: può inventare!", "Il piccolo ascolta la voce del fratello, guarda e tocca le pagine.", "Alla fine applaudite il «lettore»."],
+    why: "Il grande si sente importante e capace, il piccolo ascolta una voce che adora. Rafforza il legame tra fratelli e riduce la gelosia."
+  },
+  {
+    id: "concerto-fratellino", t: "Il concerto per il fratellino", e: "🎤", min: 30, max: 120, area: "affetti", dur: "10 min",
+    mat: ["Strumenti giocattolo o pentole e cucchiai", "Le canzoni preferite del grande"],
+    how: ["Il grande prepara un piccolo concerto: canzoni, balli, suoni.", "Il piccolo è il pubblico, seduto o in braccio.", "Il grande può guardare se il piccolo sorride, segue i suoni con lo sguardo, «balla» muovendo braccia e gambe."],
+    why: "Il grande scopre di saper far ridere il fratellino, e il piccolo riceve tanti stimoli sonori e affetto."
+  },
+  {
+    id: "aiutante-ufficiale", t: "L'aiutante ufficiale", e: "🦸", min: 30, max: 120, area: "affetti", dur: "Durante la giornata",
+    mat: ["Piccoli compiti adatti alla sua età"],
+    how: ["Dai al grande piccoli incarichi: portare il pannolino, scegliere il body, cantare durante il cambio, spingere il passeggino con un adulto.", "Ringrazialo per l'aiuto, in modo specifico («Grazie per aver scelto la tutina gialla!»).", "Ritaglia anche momenti solo per lui, senza il piccolo."],
+    why: "Coinvolgerlo lo aiuta a sentirsi parte della cura del fratellino invece che messo da parte."
+  },
+  {
     id: "ballare", t: "Balliamo!", e: "💃", min: 6, max: 24, area: "motoria", dur: "5-10 min",
     mat: ["Musica allegra"],
     how: ["Tienilo in braccio e ballate piano, poi più veloce.", "Quando sta in piedi, tienilo per le mani e ondeggiate insieme.", "Usate la «musica-stop»: ci si ferma quando la musica si spegne."],

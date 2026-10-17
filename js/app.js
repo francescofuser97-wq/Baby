@@ -1,31 +1,72 @@
 "use strict";
 (function () {
-  const VERSION = "1.2.0";
+  const VERSION = "2.0.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
   const DAY = 864e5;
 
   /* ---------------- Storage (solo su questo dispositivo) ---------------- */
-  const S = {
+  const raw = {
     get(k, d) { try { const v = localStorage.getItem("pp." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem("pp." + k, JSON.stringify(v)); } catch (e) { toast("Non riesco a salvare su questo dispositivo"); } }
+    set(k, v) { try { localStorage.setItem("pp." + k, JSON.stringify(v)); } catch (e) { toast("Non riesco a salvare su questo dispositivo"); } },
+    del(k) { try { localStorage.removeItem("pp." + k); } catch (e) { /* ignore */ } }
   };
-  const KEYS = ["settings", "foods", "favs", "ready", "done", "myEvents", "growth", "health", "appts", "questions", "contacts"];
-  let settings = S.get("settings", null);
-  let foods = S.get("foods", {});
+  // Dati di ogni figlio (salvati come "k.<id>.<chiave>") e dati in comune per la famiglia
+  const KID_KEYS = ["foods", "ready", "done", "growth", "health", "appts", "questions"];
+  const SHARED_KEYS = ["favs", "myEvents", "contacts", "evKm", "theme"];
+  let kids = raw.get("kids", null);
+  let activeKid = raw.get("activeKid", null);
+  if (!kids) {
+    // Prima versione dell'app: un solo bambino. Diventa il primo profilo.
+    kids = [];
+    const old = raw.get("settings", null);
+    if (old) {
+      const id = "k1";
+      kids.push(Object.assign({}, old, { id }));
+      KID_KEYS.forEach(k => { const v = raw.get(k, null); if (v != null) raw.set("k." + id + "." + k, v); raw.del(k); });
+      raw.del("settings");
+      activeKid = id;
+    }
+    raw.set("kids", kids); raw.set("activeKid", activeKid);
+  }
+  if (!kids.some(k => k.id === activeKid)) activeKid = kids.length ? kids[0].id : null;
+
+  const S = {
+    get(k, d) {
+      if (k === "settings") return kids.find(x => x.id === activeKid) || d || null;
+      return raw.get(KID_KEYS.includes(k) ? "k." + activeKid + "." + k : k, d);
+    },
+    set(k, v) {
+      if (k === "settings") {
+        if (!kids.some(x => x.id === activeKid)) { activeKid = "k" + Date.now().toString(36); raw.set("activeKid", activeKid); }
+        const obj = Object.assign({}, v, { id: activeKid });
+        const i = kids.findIndex(x => x.id === activeKid);
+        if (i >= 0) kids[i] = obj; else kids.push(obj);
+        raw.set("kids", kids);
+        settings = obj;
+        return;
+      }
+      raw.set(KID_KEYS.includes(k) ? "k." + activeKid + "." + k : k, v);
+    }
+  };
+  let settings, foods, ready, done, growth, health, appts, questions;
+  function loadKid() {
+    settings = S.get("settings", null);
+    foods = S.get("foods", {}); ready = S.get("ready", {}); done = S.get("done", {});
+    growth = S.get("growth", []); health = S.get("health", {}); appts = S.get("appts", []); questions = S.get("questions", []);
+  }
+  loadKid();
   let favs = S.get("favs", {});
-  let ready = S.get("ready", {});
-  let done = S.get("done", {});
   let myEvents = S.get("myEvents", []);
   let evKm = S.get("evKm", 50);
   let theme = S.get("theme", "auto");
-  let growth = S.get("growth", []);
-  let health = S.get("health", {});
-  let appts = S.get("appts", []);
-  let questions = S.get("questions", []);
   let contacts = S.get("contacts", {});
-  const ui = { rAge: "ora", rCat: "tutte", rSeason: false, rFav: false, rQ: "", aArea: "tutte", aAll: false, playTab: "giochi", evTab: "prossimi", fQ: "", openCats: {}, healthTab: "agenda", gMetric: "weight" };
+  function switchKid(id) {
+    activeKid = id; raw.set("activeKid", id); loadKid();
+  }
+  const kidAge = k => { const keep = settings; settings = k; const a = age(); settings = keep; return a; };
+  const ui = { apptScope: "kid", rAge: "ora", rCat: "tutte", rSeason: false, rFav: false, rQ: "", aArea: "tutte", aAll: false, playTab: "giochi", evTab: "prossimi", fQ: "", openCats: {}, healthTab: "agenda", gMetric: "weight" };
 
   /* ---------------- Utility ---------------- */
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -64,6 +105,7 @@
   function ageText(a) {
     if (!a) return "";
     if (a.m === 0) return plural(a.d, "giorno", "giorni");
+    if (a.m >= 24) { const y = Math.floor(a.m / 12), mm = a.m % 12; return plural(y, "anno", "anni") + (mm ? " e " + plural(mm, "mese", "mesi") : ""); }
     return plural(a.m, "mese", "mesi") + (a.d ? " e " + plural(a.d, "giorno", "giorni") : "");
   }
 
@@ -178,6 +220,13 @@
     const tab = TAB_OF[r.view] || r.view;
     document.querySelectorAll(".tabbar a").forEach(a => a.classList.toggle("on", settings != null && a.dataset.tab === tab));
     document.querySelector(".tabbar").hidden = !settings;
+    const chip = document.getElementById("kidChip");
+    chip.hidden = !settings;
+    if (settings) {
+      const n = settings.name || "Bimbo";
+      chip.innerHTML = `<span class="kid-dot" style="background:${kidColor(settings.id)}">${esc(n.charAt(0).toUpperCase())}</span><span class="kid-name">${esc(n)}</span><span aria-hidden="true">▾</span>`;
+      chip.setAttribute("aria-label", "Profilo: " + n + ". Cambia figlio");
+    }
     document.getElementById("topTitle").textContent = TITLES[r.view] || "Piccoli Passi";
     document.getElementById("btnBack").hidden = !PARENT[r.view] || !settings;
     document.getElementById("brand").querySelector("img").hidden = !!PARENT[r.view];
@@ -192,6 +241,34 @@
   window.addEventListener("hashchange", () => { sessionStorage.setItem("pp.nav", "1"); closeSheet(); render(false); });
   window.addEventListener("scroll", () => document.querySelector(".topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
 
+  /* ---------------- Profili dei figli ---------------- */
+  const KID_COLORS = ["#D9654A", "#4E8A6E", "#3F72A8", "#7559B3", "#C0517A", "#B7860F"];
+  const kidColor = id => KID_COLORS[Math.max(0, kids.findIndex(k => k.id === id)) % KID_COLORS.length];
+  function kidRow(k) {
+    const a = kidAge(k);
+    const on = k.id === activeKid;
+    return `<button class="food kid-row" data-act="kid-switch" data-id="${k.id}">
+      <span class="kid-dot big" style="background:${kidColor(k.id)}">${esc((k.name || "B").charAt(0).toUpperCase())}</span>
+      <span class="grow"><b>${esc(k.name || "Senza nome")}</b><br><span class="small muted">${a ? ageText(a) : ""}</span></span>
+      ${on ? `<span class="tag green">attivo</span>` : `<span class="muted">›</span>`}</button>`;
+  }
+  function openKids() {
+    openSheet(`<h2>👨‍👩‍👧‍👦 I vostri figli</h2>
+      <div class="card" style="padding:0;overflow:hidden">${kids.map(kidRow).join("")}</div>
+      <div class="btn-row"><button class="btn" data-act="kid-add" style="flex:1">➕ Aggiungi un figlio</button><button class="btn ghost" data-act="close">Chiudi</button></div>
+      <p class="small muted" style="margin-top:12px">Diario, allergeni, crescita, agenda e domande sono separati per ogni figlio. Preferiti, eventi e numeri di emergenza sono in comune.</p>`);
+  }
+  function openAddKid() {
+    openSheet(`<h2>➕ Nuovo figlio</h2>
+      <form id="kidForm">
+        <label class="field"><span>Nome</span><input type="text" name="name" autocomplete="off" required autofocus></label>
+        <label class="field"><span>Data di nascita</span><input type="date" name="birth" required max="${iso(today0())}"></label>
+        <label class="field"><span>Curve di crescita</span><select name="sex"><option value="m">Maschio</option><option value="f">Femmina</option></select></label>
+        <div class="btn-row"><button class="btn" type="submit" style="flex:1">Aggiungi</button><button class="btn ghost" type="button" data-act="close">Annulla</button></div>
+      </form>`);
+  }
+  document.getElementById("kidChip").addEventListener("click", openKids);
+
   /* ---------------- Benvenuto ---------------- */
   function viewWelcome() {
     return `<div class="welcome">
@@ -202,6 +279,7 @@
     <form class="card" id="welcomeForm">
       <label class="field"><span>Come si chiama il tuo bimbo?</span><input type="text" name="name" autocomplete="off" placeholder="Nome (facoltativo)"></label>
       <label class="field"><span>Quando è nato?</span><input type="date" name="birth" required max="${iso(today0())}"></label>
+      <label class="field"><span>Maschio o femmina? <small class="muted" style="display:inline;font-weight:400">(serve per le curve di crescita)</small></span><select name="sex"><option value="m">Maschio</option><option value="f">Femmina</option></select></label>
       <button class="btn block" type="submit">Iniziamo 🌱</button>
       <p class="small muted center" style="margin-top:12px">I dati restano solo su questo telefono.</p>
     </form>`;
@@ -285,7 +363,7 @@
       <section class="hero">
         <div class="hello">Ciao! 👋</div>
         <h1>${name()} ha ${ageText(a)}</h1>
-        <div class="small muted">${a ? plural(a.w, "settimana", "settimane") + " · nato il " + fmt(a.birth, { day: "numeric", month: "long", year: "numeric" }) : ""}</div>
+        <div class="small muted">${a ? plural(a.w, "settimana", "settimane") + " · " + (settings.sex === "f" ? "nata" : "nato") + " il " + fmt(a.birth, { day: "numeric", month: "long", year: "numeric" }) : ""}</div>
         ${progress}
       </section>
 
@@ -531,9 +609,9 @@
           ${Object.keys(AREAS).map(k => `<button class="chip ${ui.aArea === k ? "on" : ""}" data-act="set" data-k="aArea" data-v="${k}">${AREAS[k].e} ${AREAS[k].n}</button>`).join("")}
         </div>
         ${todays && !ui.aAll && ui.aArea === "tutte" ? `<div class="card-kicker" style="margin:6px 2px">⭐ Gioco del giorno</div>${activityCard(todays)}<div class="card-kicker" style="margin:14px 2px 6px">Tutti i giochi per questa età</div>` : ""}
-        ${list.filter(a => ui.aAll || ui.aArea !== "tutte" || a !== todays).map(activityCard).join("") || `<div class="empty"><b>🧸</b>Nessun gioco con questi filtri.</div>`}`;
+        ${list.filter(a => ui.aAll || ui.aArea !== "tutte" || a !== todays).map(activityCard).join("") || `<div class="empty"><b>🧸</b>Nessun gioco con questi filtri.${m > 24 ? " I giochi dell'app sono pensati per i primi due anni: prova «Tutte le età»." : ""}</div>`}`;
     } else if (ui.playTab === "tappe") {
-      const cur = MILESTONES.find(x => m >= x.min && m < x.max) || MILESTONES[0];
+      const cur = MILESTONES.find(x => m >= x.min && m < x.max) || MILESTONES[m < 4 ? 0 : MILESTONES.length - 1];
       body = `<p class="small muted">Sono indicazioni medie: ogni bambino ha i suoi tempi, e anche alcune settimane o mesi di differenza sono normali. Se qualcosa ti preoccupa, parlane con il pediatra.</p>
         ${MILESTONES.map(x => `<div class="card ${x === cur ? "tint-green" : ""}">
           <div class="card-kicker">${x === cur ? "📍 Questa età · " : ""}${x.t}</div>
@@ -826,7 +904,7 @@
     const line = pts.length > 1 ? `<path d="${path(pts.map(p => [p.x, p.y]))}" class="g-line"/>` : "";
     const dots = pts.map(p => {
       const pc = percentile(metric, p.g.date, p.y);
-      const label = `${fmt(parseISO(p.g.date), { day: "numeric", month: "short" })} · ${num(p.y, mt.dec)} ${mt.u} · ${pc} percentile`;
+      const label = `${fmt(parseISO(p.g.date), { day: "numeric", month: "short" })} · ${num(p.y, mt.dec)} ${mt.u}${pc ? " · " + pc + " percentile" : ""}`;
       return `<g data-act="g-pt" data-label="${esc(label)}" style="cursor:pointer"><circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="13" fill="transparent"/><circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="4.5" class="g-dot"/><title>${esc(label)}</title></g>`;
     }).join("");
     return `<svg viewBox="0 0 ${W} ${H}" class="g-chart" role="img" aria-label="${mt.n} rispetto ai percentili OMS">
@@ -846,7 +924,7 @@
     const last = k => sorted.find(g => g[k]);
     const summary = Object.keys(METRICS).map(mk => {
       const m = METRICS[mk], g = last(m.k);
-      return `<div class="stat"><small>${m.n === "Circonferenza della testa" ? "Testa" : m.n}</small><b>${g ? num(g[m.k], m.dec) + " " + m.u : "–"}</b><small>${g ? percentile(mk, g.date, g[m.k]) + " perc." : ""}</small></div>`;
+      return `<div class="stat"><small>${m.n === "Circonferenza della testa" ? "Testa" : m.n}</small><b>${g ? num(g[m.k], m.dec) + " " + m.u : "–"}</b><small>${g && percentile(mk, g.date, g[m.k]) ? percentile(mk, g.date, g[m.k]) + " perc." : ""}</small></div>`;
     }).join("");
     const chip = (k, v, l, cur) => `<button class="chip ${cur === v ? "on" : ""}" data-act="${k}" data-v="${v}">${l}</button>`;
     return `
@@ -859,11 +937,12 @@
         ${growthChart(metric)}
         <p class="small muted" style="margin:6px 0 0">Fascia chiara: dal 3° al 97° percentile OMS · fascia scura: dal 15° all'85° · linea tratteggiata: 50°. Tocca un punto per vedere il valore.</p>
       </div>
+      ${ageM() >= 24 ? `<div class="note small">Le curve OMS di questa sezione arrivano a 24 mesi: le misure successive restano nella tabella, senza percentile.</div>` : ""}
       <button class="btn block" data-act="g-add">➕ Aggiungi misurazione</button>
       <div class="section-title"><h2>Misurazioni</h2></div>
       ${sorted.length ? `<div class="card" style="padding:0;overflow-x:auto"><table class="tbl"><thead><tr><th>Data</th><th>Peso</th><th>Lungh.</th><th>Testa</th><th></th></tr></thead><tbody>
         ${sorted.map(g => `<tr><td>${fmt(parseISO(g.date), { day: "numeric", month: "short", year: "2-digit" })}</td>
-          ${["weight", "length", "head"].map(k => { const v = g[METRICS[k].k]; return `<td>${v ? num(v, METRICS[k].dec) + `<br><small class="muted">${percentile(k, g.date, v)}</small>` : "–"}</td>`; }).join("")}
+          ${["weight", "length", "head"].map(k => { const v = g[METRICS[k].k]; return `<td>${v ? num(v, METRICS[k].dec) + `<br><small class="muted">${percentile(k, g.date, v) || ""}</small>` : "–"}</td>`; }).join("")}
           <td><button class="icon-btn" style="width:32px;height:32px;font-size:1rem" data-act="g-del" data-id="${g.id}" aria-label="Elimina">🗑️</button></td></tr>`).join("")}
       </tbody></table></div>` : `<div class="empty"><b>📏</b>Nessuna misurazione. Aggiungi quelle del libretto pediatrico o dell'ultima visita.</div>`}
       <p class="disclaimer">I percentili descrivono, non giudicano: conta soprattutto che la crescita segua la sua curva nel tempo. Le valutazioni le fa il pediatra.</p>`;
@@ -881,21 +960,27 @@
   }
 
   const APPT_TYPES = { visita: "🩺 Visita dal pediatra", vaccino: "💉 Vaccinazione", bilancio: "📋 Bilancio di salute", altro: "📌 Altro" };
+  function familyAppts() {
+    return kids.flatMap(k => (k.id === activeKid ? appts : raw.get("k." + k.id + ".appts", [])).map(ap => Object.assign({}, ap, { kid: k })));
+  }
   function apptCard(ap) {
     const d = parseISO(ap.date);
+    const other = ap.kid && ap.kid.id !== activeKid;
     return `<div class="card"><div class="ev">${dateBox({ start: ap.date })}
-      <div class="grow" style="min-width:0"><h3>${esc(ap.t || APPT_TYPES[ap.type] || "Appuntamento")}</h3>
+      <div class="grow" style="min-width:0">${ap.kid && kids.length > 1 ? `<span class="tag" style="color:#fff;background:${kidColor(ap.kid.id)}">${esc(ap.kid.name || "Bimbo")}</span>` : ""}<h3>${esc(ap.t || APPT_TYPES[ap.type] || "Appuntamento")}</h3>
         <div class="where">${fmt(d, { weekday: "long", day: "numeric", month: "long" })}${ap.time ? " · ore " + esc(ap.time) : ""}${ap.place ? "<br>📍 " + esc(ap.place) : ""}</div>
         ${ap.note ? `<p class="small" style="margin:6px 0 0">${esc(ap.note)}</p>` : ""}
-        <div class="btn-row"><button class="btn ghost small" data-act="ap-ics" data-id="${ap.id}">📅 Calendario</button><button class="btn danger small" data-act="ap-del" data-id="${ap.id}">Elimina</button></div>
+        <div class="btn-row"><button class="btn ghost small" data-act="ap-ics" data-id="${ap.id}">📅 Calendario</button>${other ? "" : `<button class="btn danger small" data-act="ap-del" data-id="${ap.id}">Elimina</button>`}</div>
       </div></div></div>`;
   }
 
   function viewAgenda() {
     const a = age();
     const t = today0();
-    const upcoming = appts.filter(x => parseISO(x.date) >= t).sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
-    const past = appts.length - upcoming.length;
+    const fam = ui.apptScope === "family" && kids.length > 1;
+    const list = fam ? familyAppts() : appts.map(ap => Object.assign({}, ap, { kid: settings }));
+    const upcoming = list.filter(x => parseISO(x.date) >= t).sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
+    const past = list.length - upcoming.length;
     const item = (id, title, dueM, detail) => {
       const due = a ? addMonths(a.birth, dueM) : null;
       const d = health[id];
@@ -906,16 +991,23 @@
         ${d ? `<span class="tag green">fatto · ${fmt(parseISO(d), { day: "numeric", month: "short" })}</span>` : soon ? `<span class="tag peach">in arrivo</span>` : ""}
         <span class="detail">${detail}</span></span></label>`;
     };
+    // Le voci scadute da più di 2 mesi e non segnate finiscono in un gruppo chiuso
+    const split = rows => {
+      const old = rows.filter(r => a && !health[r.id] && daysBetween(addMonths(a.birth, r.m), t) > 60);
+      const cur = rows.filter(r => !old.includes(r));
+      return cur.map(r => r.html).join("") + (old.length ? `<details class="group" style="box-shadow:none;margin:10px 0 0"><summary>Già passati, non segnati (${old.length})</summary><div style="padding:0 12px">${old.map(r => r.html).join("")}</div></details>` : "");
+    };
     return `
       <button class="btn block" data-act="ap-add">➕ Aggiungi appuntamento</button>
       <div class="section-title"><h2>Prossimi appuntamenti</h2></div>
+      ${kids.length > 1 ? `<div class="chips"><button class="chip ${fam ? "" : "on"}" data-act="set" data-k="apptScope" data-v="kid">Solo ${name()}</button><button class="chip ${fam ? "on" : ""}" data-act="set" data-k="apptScope" data-v="family">👨‍👩‍👧‍👦 Tutta la famiglia</button></div>` : ""}
       ${upcoming.map(apptCard).join("") || `<div class="card small muted">Nessun appuntamento. Aggiungi visite e vaccinazioni: con «📅 Calendario» finiscono nel calendario del telefono, con il promemoria il giorno prima.</div>`}
-      ${past ? `<p class="small muted">${plural(past, "appuntamento passato", "appuntamenti passati")} (eliminali quando vuoi).</p>${appts.filter(x => parseISO(x.date) < t).map(apptCard).join("")}` : ""}
+      ${past ? `<p class="small muted">${plural(past, "appuntamento passato", "appuntamenti passati")} (eliminali quando vuoi).</p>${list.filter(x => parseISO(x.date) < t).map(apptCard).join("")}` : ""}
       <div class="section-title"><h2>📋 Bilanci di salute</h2></div>
-      <div class="card">${CHECKUPS.map(c => item("c:" + c.id, c.t, c.m, esc(c.d))).join("")}
+      <div class="card">${split(CHECKUPS.map(c => ({ id: "c:" + c.id, m: c.m, html: item("c:" + c.id, c.t, c.m, esc(c.d)) })))}
         <p class="small muted" style="margin:10px 0 0">Età indicative: il calendario preciso lo concordi con il pediatra. Spunta quando l'avete fatto.</p></div>
       <div class="section-title"><h2>💉 Vaccinazioni</h2></div>
-      <div class="card">${VACCINES.map(v => item("v:" + v.id, v.t, v.m, v.items.map(esc).join(" · "))).join("")}
+      <div class="card">${split(VACCINES.map(v => ({ id: "v:" + v.id, m: v.m, html: item("v:" + v.id, v.t, v.m, v.items.map(esc).join(" · ")) })))}
         <p class="small muted" style="margin:10px 0 0">Calendario indicativo nazionale. La ULSS 8 Berica vi manda la lettera di invito con data e ora: quando arriva, aggiungila come appuntamento. Per dubbi chiedi al pediatra o al servizio vaccinazioni.</p></div>`;
   }
 
@@ -1018,12 +1110,18 @@
   function viewSettings() {
     return `
       <form class="card" id="settingsForm">
-        <h2>👶 Il tuo bimbo</h2>
+        <h2>👶 Profilo di ${name()}</h2>
         <label class="field"><span>Nome</span><input type="text" name="name" value="${esc(settings.name || "")}" autocomplete="off"></label>
         <label class="field"><span>Data di nascita</span><input type="date" name="birth" value="${esc(settings.birth || "")}" max="${iso(today0())}" required></label>
         <label class="field"><span>Curve di crescita</span><select name="sex"><option value="m" ${settings.sex !== "f" ? "selected" : ""}>Maschio</option><option value="f" ${settings.sex === "f" ? "selected" : ""}>Femmina</option></select></label>
-        <button class="btn" type="submit">Salva</button>
+        <div class="btn-row" style="margin-top:0"><button class="btn" type="submit">Salva</button>
+          ${kids.length > 1 ? `<button class="btn danger" type="button" data-act="kid-del">Elimina profilo</button>` : ""}</div>
       </form>
+      <div class="card">
+        <h2>👨‍👩‍👧‍👦 I vostri figli</h2>
+        <div style="margin:0 -16px">${kids.map(kidRow).join("")}</div>
+        <button class="btn ghost block" data-act="kid-add" style="margin-top:10px">➕ Aggiungi un figlio</button>
+      </div>
       <div class="card">
         <h2>🎨 Aspetto</h2>
         <div class="segmented" style="margin-bottom:0">
@@ -1058,6 +1156,18 @@
       case "set": ui[t.dataset.k] = t.dataset.v; render(true); break;
       case "set-bool": ui[t.dataset.k] = t.dataset.v === "1"; render(true); break;
       case "toggle": ui[t.dataset.k] = !ui[t.dataset.k]; render(true); break;
+      case "kid-switch":
+        if (t.dataset.id !== activeKid) { switchKid(t.dataset.id); toast("Ora vedi " + (settings.name || "il profilo selezionato")); }
+        closeSheet(); render(false); break;
+      case "kid-add": openAddKid(); break;
+      case "kid-del":
+        if (kids.length > 1 && confirm("Eliminare il profilo di " + (settings.name || "questo bimbo") + " con diario, crescita e agenda? Non si può annullare.")) {
+          const id = activeKid;
+          KID_KEYS.forEach(k => raw.del("k." + id + "." + k));
+          kids = kids.filter(k => k.id !== id); raw.set("kids", kids);
+          switchKid(kids[0].id); toast("Profilo eliminato"); location.hash = "#/oggi"; render(false);
+        }
+        break;
       case "set-theme": theme = t.dataset.v; S.set("theme", theme); applyTheme(); render(true); break;
       case "set-km": evKm = Number(t.dataset.v); S.set("evKm", evKm); render(true); break;
       case "set-sex": settings.sex = t.dataset.v; S.set("settings", settings); render(true); break;
@@ -1073,7 +1183,7 @@
       case "ap-del":
         if (confirm("Eliminare questo appuntamento?")) { appts = appts.filter(x => x.id !== t.dataset.id); S.set("appts", appts); render(true); }
         break;
-      case "ap-ics": { const ap = appts.find(x => x.id === t.dataset.id); if (ap) download(ap.id + ".ics", icsAppt(ap), "text/calendar;charset=utf-8"); break; }
+      case "ap-ics": { const ap = familyAppts().find(x => x.id === t.dataset.id); if (ap) download(ap.id + ".ics", icsAppt(ap), "text/calendar;charset=utf-8"); break; }
       case "h-toggle":
         if (t.checked) health[t.dataset.id] = iso(today0()); else delete health[t.dataset.id];
         S.set("health", health); render(true); break;
@@ -1118,16 +1228,17 @@
         if (confirm("Eliminare questo evento?")) { myEvents = myEvents.filter(x => x.id !== t.dataset.id); S.set("myEvents", myEvents); render(true); }
         break;
       case "export": {
-        const data = { app: "piccoli-passi", v: 1, exported: new Date().toISOString() };
-        KEYS.forEach(k => { data[k] = S.get(k, null); });
+        const data = { app: "piccoli-passi", v: 2, exported: new Date().toISOString(), kids, activeKid, kidData: {} };
+        SHARED_KEYS.forEach(k => { data[k] = raw.get(k, null); });
+        kids.forEach(k => { data.kidData[k.id] = {}; KID_KEYS.forEach(key => { data.kidData[k.id][key] = raw.get("k." + k.id + "." + key, null); }); });
         download("piccoli-passi-backup-" + iso(today0()) + ".json", JSON.stringify(data, null, 2), "application/json");
         break;
       }
       case "reset":
         if (confirm("Vuoi davvero cancellare tutti i dati (diario, preferiti, eventi)?")) {
-          KEYS.concat(["installDismissed"]).forEach(k => { try { localStorage.removeItem("pp." + k); } catch (err) { /* ignore */ } });
-          settings = null; foods = {}; favs = {}; ready = {}; done = {}; myEvents = [];
-          growth = []; health = {}; appts = []; questions = []; contacts = {};
+          try { Object.keys(localStorage).filter(k => k.startsWith("pp.")).forEach(k => localStorage.removeItem(k)); } catch (err) { /* ignore */ }
+          kids = []; raw.set("kids", kids); switchKid(null);
+          favs = {}; myEvents = []; contacts = {};
           location.hash = "#/oggi"; render(false);
         }
         break;
@@ -1155,11 +1266,20 @@
           const data = JSON.parse(reader.result);
           if (data.app !== "piccoli-passi") throw new Error("formato");
           if (!confirm("Importare i dati? Quelli presenti su questo telefono verranno sostituiti.")) return;
-          KEYS.forEach(k => { if (data[k] != null) S.set(k, data[k]); });
-          settings = S.get("settings", settings); foods = S.get("foods", {}); favs = S.get("favs", {});
-          ready = S.get("ready", {}); done = S.get("done", {}); myEvents = S.get("myEvents", []);
-          growth = S.get("growth", []); health = S.get("health", {}); appts = S.get("appts", []);
-          questions = S.get("questions", []); contacts = S.get("contacts", {});
+          let newKids, kidData;
+          if (data.v >= 2) { newKids = data.kids || []; kidData = data.kidData || {}; }
+          else {
+            // backup della prima versione: un solo bambino
+            newKids = data.settings ? [Object.assign({}, data.settings, { id: "k1" })] : [];
+            kidData = { k1: {} }; KID_KEYS.forEach(k => { kidData.k1[k] = data[k]; });
+          }
+          try { Object.keys(localStorage).filter(k => k.startsWith("pp.k.")).forEach(k => localStorage.removeItem(k)); } catch (err) { /* ignore */ }
+          kids = newKids; raw.set("kids", kids);
+          newKids.forEach(k => KID_KEYS.forEach(key => { const v = (kidData[k.id] || {})[key]; if (v != null) raw.set("k." + k.id + "." + key, v); }));
+          SHARED_KEYS.forEach(k => { if (data[k] != null) raw.set(k, data[k]); });
+          switchKid(kids.some(k => k.id === data.activeKid) ? data.activeKid : (kids[0] || {}).id || null);
+          favs = raw.get("favs", {}); myEvents = raw.get("myEvents", []); contacts = raw.get("contacts", {});
+          evKm = raw.get("evKm", 50); theme = raw.get("theme", "auto"); applyTheme();
           toast("Dati importati ✅"); render(false);
         } catch (err) { toast("File non valido"); }
       };
@@ -1178,8 +1298,14 @@
       settings = Object.assign({}, settings || {}, { name: String(fd.get("name") || "").trim(), birth });
       if (fd.get("sex")) settings.sex = fd.get("sex");
       S.set("settings", settings);
+      if (f.id === "welcomeForm") switchKid(activeKid);
       if (f.id === "settingsForm") toast("Salvato ✅");
       location.hash = "#/oggi"; render(false);
+    } else if (f.id === "kidForm") {
+      activeKid = null;
+      S.set("settings", { name: String(fd.get("name") || "").trim(), birth: fd.get("birth"), sex: fd.get("sex") || "m" });
+      switchKid(activeKid);
+      closeSheet(); toast("Benvenuto " + settings.name + "! 🎉"); location.hash = "#/oggi"; render(false);
     } else if (f.id === "foodForm") {
       const prev = foods[f.dataset.id];
       const date = fd.get("date");

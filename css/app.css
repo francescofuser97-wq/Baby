@@ -390,3 +390,11 @@ label.field small { display: block; margin-top: 6px; }
 .allergen b { filter: grayscale(1); opacity: .8; }
 .allergen { color: var(--ink); opacity: .75; }
 .allergen.on { opacity: 1; }
+
+/* Selettore dei figli */
+.kid-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 99px; padding: 3px 10px 3px 3px; font: inherit; font-weight: 700; font-size: .85rem; cursor: pointer; max-width: 140px; flex: none; }
+.kid-chip .kid-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kid-dot { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 800; font-size: .9rem; flex: none; }
+.kid-dot.big { width: 40px; height: 40px; font-size: 1.1rem; }
+.kid-row { align-items: center; }
+@media (max-width: 360px) { .kid-chip .kid-name { display: none; } }
