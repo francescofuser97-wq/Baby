@@ -12,7 +12,7 @@
  *   Esegui come: Me · Chi ha accesso: Chiunque
  */
 var FILE_PREFIX = 'piccoli-passi-';
-var VERSION = 3;
+var VERSION = 4;
 
 function doGet() {
   return json_({ ok: true, app: 'piccoli-passi', v: VERSION, msg: 'Servizio di condivisione attivo.' });
@@ -24,22 +24,26 @@ function doPost(e) {
   // Notizie: nessun dato personale e nessun codice; non blocca le sincronizzazioni delle famiglie
   if (req.action === 'news') return json_(news_(req.q));
 
-  var lock = LockService.getScriptLock();
-  lock.waitLock(25000);
-  try {
-    var key = String(req.key || '');                          // identificativo dello spazio
-    if (key.length < 20) return json_({ error: 'codice non valido' });
+  var key = String(req.key || '');                            // identificativo dello spazio
+  if (key.length < 20) return json_({ error: 'codice non valido' });
+  var changes = req.changes || [];
+  if (changes.length > 2000) return json_({ error: 'troppe modifiche in una volta' });
 
+  // Una sincronizzazione alla volta; se il servizio è occupato si risponde subito e il telefono riprova
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return json_({ error: 'servizio occupato, riprovo tra poco' });
+  try {
     var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, key);
     var name = FILE_PREFIX + Utilities.base64EncodeWebSafe(digest).replace(/=+$/, '').slice(0, 32) + '.json';
-    var files = DriveApp.getFilesByName(name);
-    var file = files.hasNext() ? files.next() : null;
+    var props = PropertiesService.getScriptProperties();
+    var file = findFile_(name, props);
     var db = file ? JSON.parse(file.getBlob().getDataAsString()) : { seq: 0, rec: {} };
+    // «id» cambia solo se il file viene ricreato (per esempio dopo una cancellazione): i telefoni allora rimandano tutto
+    if (!db.id) db.id = Utilities.getUuid();
 
-    // Unisce le modifiche: per ogni elemento vince la modifica più recente
-    var changes = req.changes || [];
-    var applied = 0;
-    if (changes.length > 2000) return json_({ error: 'troppe modifiche in una volta' });
+    // Unisce le modifiche: per ogni elemento vince la modifica più recente.
+    // Quelle più vecchie di ciò che c'è già vengono scartate e al telefono si rimanda il valore attuale.
+    var applied = 0, rejected = [];
     for (var i = 0; i < changes.length; i++) {
       var c = changes[i];
       if (!c || typeof c.k !== 'string') continue;
@@ -48,26 +52,59 @@ function doPost(e) {
         db.seq++;
         db.rec[c.k] = { v: c.d ? null : c.v, t: Number(c.t), d: !!c.d, s: db.seq };
         applied++;
-      }
+      } else rejected.push(c.k);
     }
     // il file si crea solo alla prima modifica: una semplice lettura non lascia file vuoti nel Drive
     if (applied) {
       var text = JSON.stringify(db);
-      if (file) file.setContent(text); else DriveApp.createFile(name, text, 'application/json');
+      if (file) file.setContent(text);
+      else { file = DriveApp.createFile(name, text, 'application/json'); props.setProperty('f:' + name, file.getId()); }
     }
 
     // Restituisce tutto ciò che è cambiato dall'ultima sincronizzazione del telefono
     var since = Number(req.since || 0);
-    var out = [];
+    var out = [], sent = {};
     for (var k in db.rec) {
-      if (db.rec[k].s > since) out.push({ k: k, v: db.rec[k].v, t: db.rec[k].t, d: db.rec[k].d });
+      if (db.rec[k].s > since) { out.push({ k: k, v: db.rec[k].v, t: db.rec[k].t, d: db.rec[k].d }); sent[k] = true; }
     }
-    return json_({ seq: db.seq, rec: out });
+    rejected.forEach(function (k) { if (!sent[k]) { out.push({ k: k, v: db.rec[k].v, t: db.rec[k].t, d: db.rec[k].d }); sent[k] = true; } });
+    return json_({ seq: db.seq, rec: out, id: file ? db.id : null });
   } catch (err) {
     return json_({ error: String(err) });
   } finally {
     lock.releaseLock();
   }
+}
+
+/* Trova il file dello spazio. L'indirizzo del file è ricordato nelle proprietà dello script (più veloce
+   e sicuro della ricerca in Drive, che a volte non vede subito i file appena creati).
+   Se per qualche motivo esistono più file con lo stesso nome, li unisce in uno solo. */
+function findFile_(name, props) {
+  var id = props.getProperty('f:' + name);
+  if (id) {
+    try { var known = DriveApp.getFileById(id); if (!known.isTrashed()) return known; } catch (err) { /* file non più disponibile */ }
+    props.deleteProperty('f:' + name);
+  }
+  var it = DriveApp.getFilesByName(name), list = [];
+  while (it.hasNext()) { var f = it.next(); if (!f.isTrashed()) list.push(f); }
+  if (!list.length) return null;
+  var main = list[0];
+  if (list.length > 1) {
+    var db = JSON.parse(main.getBlob().getDataAsString());
+    for (var i = 1; i < list.length; i++) {
+      var other = JSON.parse(list[i].getBlob().getDataAsString());
+      db.seq = Math.max(db.seq, other.seq);
+      for (var k in other.rec) {
+        if (!db.rec[k] || Number(other.rec[k].t) > Number(db.rec[k].t)) db.rec[k] = other.rec[k];
+      }
+      list[i].setTrashed(true);
+    }
+    // tutti i telefoni devono ricevere di nuovo tutto: si rinumerano gli elementi
+    for (var r in db.rec) db.rec[r].s = ++db.seq;
+    main.setContent(JSON.stringify(db));
+  }
+  props.setProperty('f:' + name, main.getId());
+  return main;
 }
 
 /* Notizie da Google News per alcune ricerche (max 5), tenute in memoria per 3 ore.

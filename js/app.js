@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.3.0";
+  const VERSION = "4.3.1";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -1863,23 +1863,61 @@
     return codec;
   }
 
+  // Il servizio Google a volte è lento (anche 10 secondi) o risponde con una pagina d'errore:
+  // ogni richiesta ha un tempo massimo e, se non riesce, si riprova da soli sempre più di rado.
+  var syncAgain = false, syncFails = 0, retryTimer = null;
+  async function postSync(url, body) {
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 45000);
+    try {
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body), signal: ctl.signal });
+      const txt = await res.text();
+      try { return JSON.parse(txt); }
+      catch (e) { throw new Error(res.status === 404 || /impossibile aprire il file|unable to open the file/i.test(txt) ? "il servizio Google è momentaneamente occupato" : "risposta non valida dal servizio"); }
+    } catch (err) {
+      if (err.name === "AbortError") throw new Error("il servizio Google non ha risposto in tempo");
+      if (err instanceof TypeError) throw new Error("connessione assente o servizio non raggiungibile");
+      throw err;
+    } finally { clearTimeout(tm); }
+  }
+  // Indirizzi di versioni precedenti del servizio centrale: stessi dati (stesso Drive), si passa da soli a quello attuale
+  function currentSync() {
+    const cfg = raw.get("sync", null), central = centralUrl(), old = (window.PP_CONFIG && PP_CONFIG.previousServiceUrls) || [];
+    if (cfg && central && cfg.url !== central && old.includes(cfg.url)) { cfg.url = central; raw.set("sync", cfg); }
+    return cfg;
+  }
   async function syncNow(manual) {
-    const cfg = raw.get("sync", null);
-    if (!cfg || syncing) return false;
-    syncing = true; clearTimeout(syncTimer);
+    const cfg = currentSync();
+    if (!cfg) return false;
+    if (syncing) {
+      // ce n'è già una in corso: se ne fa un'altra appena finisce (e se l'ha chiesta la persona, glielo si dice)
+      syncAgain = manual ? "manual" : (syncAgain || "auto");
+      if (manual) toast("Sincronizzazione in corso…");
+      return false;
+    }
+    syncing = true; clearTimeout(syncTimer); clearTimeout(retryTimer);
     try {
       const codec = await getCodec(cfg);
       const cur = flatten(), meta = cfg.meta || {}, now = Date.now(), changes = [], startJson = {};
       Object.keys(cur).forEach(n => { startJson[n] = JSON.stringify(cur[n]); });
       for (const n of Object.keys(cur)) if (meta[n] !== hashStr(startJson[n])) changes.push({ k: await codec.keyFor(n), v: await codec.encode(n, cur[n]), t: now });
       for (const n of Object.keys(meta)) if (!(n in cur)) changes.push({ k: await codec.keyFor(n), v: null, t: now, d: true });
-      const res = await fetch(cfg.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ key: codec.space, since: cfg.seq || 0, changes }) });
-      const data = await res.json();
-      if (!data || data.error || !Array.isArray(data.rec)) throw new Error((data && data.error) || "risposta non valida");
+      const since = cfg.full ? 0 : cfg.seq || 0;
+      const data = await postSync(cfg.url, { key: codec.space, since, changes });
+      if (!data || data.error || !Array.isArray(data.rec)) throw new Error((data && data.error) || "risposta non valida dal servizio");
+      // Lo spazio sul servizio è stato ricreato (id diverso) o ha meno modifiche di quelle già viste: si riallinea tutto
+      if (!cfg.full && (data.seq < since || (cfg.epoch && data.id && data.id !== cfg.epoch))) {
+        raw.set("sync", Object.assign({}, raw.get("sync", cfg), { full: true }));
+        syncAgain = syncAgain || "auto";
+        return false;
+      }
       let changed = false;
+      const onServer = new Set();
       for (const r of data.rec) {
-        if (r.d) { const n = codec.nameFor(r.k); if (n && n in cur) { delete cur[n]; changed = true; } continue; }
+        const nm = codec.nameFor(r.k);
+        if (nm) onServer.add(nm);
+        if (r.d) { if (nm && nm in cur) { delete cur[nm]; changed = true; } continue; }
         const o = await codec.decode(r);
+        if (o) onServer.add(o.n);
         if (o && JSON.stringify(cur[o.n]) !== JSON.stringify(o.v)) { cur[o.n] = o.v; changed = true; }
       }
       // Modifiche fatte su questo telefono mentre la sincronizzazione era in corso: si tengono e partono al giro dopo
@@ -1890,17 +1928,32 @@
       const newMeta = {};
       Object.keys(cur).forEach(n => { newMeta[n] = hashStr(JSON.stringify(cur[n])); });
       dirty.forEach(n => { if (n in startJson) newMeta[n] = hashStr(startJson[n]); else delete newMeta[n]; });
-      raw.set("sync", Object.assign({}, raw.get("sync", cfg), { seq: data.seq, meta: newMeta, last: Date.now(), err: "" }));
-      if (dirty.length) syncTimer = setTimeout(() => syncNow(false), 1500);
+      // Dopo un riallineamento: ciò che il servizio non ha più si rimanda
+      let resend = false;
+      if (cfg.full) Object.keys(cur).forEach(n => { if (!onServer.has(n)) { delete newMeta[n]; resend = true; } });
+      const saved = Object.assign({}, raw.get("sync", cfg), { seq: data.seq, meta: newMeta, last: Date.now(), err: "" });
+      if (data.id) saved.epoch = data.id;
+      delete saved.full;
+      raw.set("sync", saved);
+      syncFails = 0;
+      if (dirty.length || resend) syncTimer = setTimeout(() => syncNow(false), 1500);
       if (changed || manual || /impostazioni/.test(location.hash)) { if (sheet.hidden) render(true); else pendingRender = true; }
       if (manual) toast(changed ? "Dati aggiornati dalla famiglia ✅" : "Tutto sincronizzato ✅");
       return true;
     } catch (err) {
       const c = raw.get("sync", null);
-      if (c) raw.set("sync", Object.assign(c, { err: String(err && err.message || err) }));
-      if (manual) toast("Sincronizzazione non riuscita: controlla la connessione");
+      if (c) {
+        raw.set("sync", Object.assign(c, { err: String(err && err.message || err) }));
+        syncFails++;
+        retryTimer = setTimeout(() => syncNow(false), Math.min(300, 15 * Math.pow(2, syncFails - 1)) * 1000);
+        if (/impostazioni/.test(location.hash) && sheet.hidden) render(true);
+      }
+      if (manual) toast("Sincronizzazione non riuscita: " + String(err && err.message || err) + ". Riprovo da solo.");
       return false;
-    } finally { syncing = false; }
+    } finally {
+      syncing = false;
+      if (syncAgain) { const m = syncAgain === "manual"; syncAgain = false; setTimeout(() => syncNow(m), 300); }
+    }
   }
   const b64u = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const unb64u = str => decodeURIComponent(escape(atob(str.replace(/-/g, "+").replace(/_/g, "/"))));
@@ -1924,9 +1977,18 @@
   // Crea un nuovo spazio cifrato sul servizio indicato e carica i dati di questo telefono
   async function startSpace(url) {
     raw.set("sync", { v: 2, url, secret: randomKey(), seq: 0, meta: {}, last: 0, err: "" });
-    const ok = await syncNow(false);
-    if (!ok) raw.del("sync");
+    const ok = await syncWithRetry();
+    if (!ok) { clearTimeout(retryTimer); raw.del("sync"); }
     return ok;
+  }
+  // Per attivare o entrare in uno spazio: fino a 3 tentativi, perché il servizio a volte non risponde al primo colpo
+  async function syncWithRetry() {
+    for (let i = 0; i < 3; i++) {
+      if (i) await new Promise(r => setTimeout(r, 2500 * i));
+      while (syncing) await new Promise(r => setTimeout(r, 300));
+      if (await syncNow(false)) return true;
+    }
+    return false;
   }
 
   function syncCard() {
@@ -1942,7 +2004,7 @@
     const own = c.url !== central;
     return `<div class="card tint-green">
         <h2>👨‍👩‍👧 Condivisione attiva</h2>
-        <p class="small">${c.err ? `⚠️ Ultimo tentativo non riuscito (${esc(c.err)}). Riproverò da solo.` : "✅ Tutto collegato."} Ultima sincronizzazione: <b>${esc(when)}</b>.</p>
+        <p class="small">${c.err ? `⚠️ Ultimo tentativo non riuscito: ${esc(c.err)}. Riprovo da solo tra poco.` : "✅ Tutto collegato."} Ultima sincronizzazione riuscita: <b>${esc(when)}</b>.</p>
         <p class="small">${c.v === 2 ? "🔒 Dati cifrati sul telefono: " + (own ? "il vostro servizio Google" : "il servizio dell'app") + " conserva solo dati illeggibili." : "⚠️ Questo spazio è stato creato prima della cifratura: i dati sono leggibili nel Drive di chi ha creato il servizio."}</p>
         <div class="btn-row">
           <button class="btn" data-act="sync-invite">📨 Invita qualcuno</button>
@@ -1979,7 +2041,7 @@
         <li>Apri il progetto «Piccoli Passi» su <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a>.</li>
         <li>Cancella il codice e incolla quello nuovo: <button class="btn ghost small" data-act="sync-copy-script" type="button">📋 Copia il codice</button></li>
         <li>Premi <b>Esegui il deployment → Gestisci deployment</b>, tocca la matita ✏️, in «Versione» scegli <b>Nuova versione</b> e premi <b>Esegui il deployment</b>.</li>
-        <li>Se Google lo chiede, autorizza di nuovo: ora il servizio legge anche le notizie (Google News).</li>
+        <li>Se Google lo chiede, autorizza di nuovo (Drive e servizi esterni, che servono per le notizie).</li>
       </ol>
       <div class="btn-row"><button class="btn" data-act="feed-reload" style="flex:1">Fatto, prova le notizie</button><button class="btn ghost" data-act="close">Chiudi</button></div>`);
   }
@@ -2039,7 +2101,7 @@
     kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; home = null; activeKid = null; raw.set("activeKid", null); loadKid();
     raw.set("sync", Object.assign({}, inv, { seq: 0, meta: {}, last: 0, err: "" }));
     closeSheet(); toast("Collegamento in corso…");
-    const ok = await syncNow(false);
+    const ok = await syncWithRetry();
     location.hash = "#/oggi"; render(false);
     toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato! Ora inserisci il tuo bimbo per iniziare 🌱") : "Non riesco a collegarmi: controlla la connessione e riprova da Impostazioni");
   }
@@ -2503,10 +2565,9 @@
   handleInviteLink();
   render(false);
   enrichHome(false);
-  if (raw.get("sync", null)) {
-    syncNow(false);
-    setInterval(() => { if (document.visibilityState === "visible") syncNow(false); }, 60000);
-  }
+  if (raw.get("sync", null)) syncNow(false);
+  // ogni minuto, mentre l'app è aperta (anche se la condivisione è stata attivata dopo l'avvio)
+  setInterval(() => { if (document.visibilityState === "visible" && raw.get("sync", null) && !syncFails) syncNow(false); }, 60000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && raw.get("sync", null)) syncNow(false); });
 
   // Aggiorna la pagina "Oggi" se l'app resta aperta a cavallo della mezzanotte
