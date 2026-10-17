@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.3.1";
+  const VERSION = "4.3.2";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -285,6 +285,18 @@
 
   /* ---------------- Benvenuto ---------------- */
   function viewWelcome() {
+    // Invito già usato ma dati non ancora arrivati: niente modulo (creerebbe un secondo bimbo), si aspetta il collegamento
+    const c = raw.get("sync", null);
+    if (c && !c.last) return `<div class="welcome">
+      <img src="icons/icon.svg" alt="">
+      <h1>Ti stai collegando alla famiglia</h1>
+      <p class="muted">${c.err ? "Il servizio non ha ancora risposto (" + esc(c.err) + "). Riprovo da solo: puoi lasciare l'app aperta." : "Sto scaricando i dati condivisi: di solito servono pochi secondi, a volte fino a un minuto."}</p>
+    </div>
+    <div class="card center">
+      <button class="btn block" data-act="sync-now">🔄 Riprova adesso</button>
+      <p class="small muted" style="margin:12px 0 0">Chi ti ha invitato deve aver già attivato la condivisione sul suo telefono.</p>
+      <button class="link-btn small" data-act="sync-leave" style="margin-top:10px">Annulla e inizia senza condivisione</button>
+    </div>`;
     return `<div class="welcome">
       <img src="icons/icon.svg" alt="">
       <h1>Benvenuti in Piccoli Passi</h1>
@@ -2100,10 +2112,10 @@
     applyingRemote = false;
     kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; home = null; activeKid = null; raw.set("activeKid", null); loadKid();
     raw.set("sync", Object.assign({}, inv, { seq: 0, meta: {}, last: 0, err: "" }));
-    closeSheet(); toast("Collegamento in corso…");
+    closeSheet(); toast("Collegamento in corso…"); render(false);
     const ok = await syncWithRetry();
     location.hash = "#/oggi"; render(false);
-    toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato! Ora inserisci il tuo bimbo per iniziare 🌱") : "Non riesco a collegarmi: controlla la connessione e riprova da Impostazioni");
+    toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato! Ora inserisci il tuo bimbo per iniziare 🌱") : "Il servizio non risponde ancora: riprovo da solo");
   }
 
   /* ---------------- Scelta del comune (OpenStreetMap + Wikidata) ---------------- */
