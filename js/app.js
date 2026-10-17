@@ -19,6 +19,7 @@
   let done = S.get("done", {});
   let myEvents = S.get("myEvents", []);
   let evKm = S.get("evKm", 50);
+  let theme = S.get("theme", "auto");
   let growth = S.get("growth", []);
   let health = S.get("health", {});
   let appts = S.get("appts", []);
@@ -83,6 +84,16 @@
 
   const segLabel = l => l.replace(/^(\S+)\s+/, '<span class="se" aria-hidden="true">$1</span>');
   const mapsUrl = q => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+
+  /* ---------------- Tema chiaro / scuro ---------------- */
+  function applyTheme() {
+    const root = document.documentElement;
+    if (theme === "light" || theme === "dark") root.dataset.theme = theme; else delete root.dataset.theme;
+    const dark = theme === "dark" || (theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m => { m.setAttribute("content", dark ? "#1E1A18" : "#FFF8F1"); m.removeAttribute("media"); });
+  }
+  applyTheme();
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 
   /* ---------------- Sheet (pannello dal basso) ---------------- */
   function openSheet(html) {
@@ -1013,6 +1024,13 @@
         <label class="field"><span>Curve di crescita</span><select name="sex"><option value="m" ${settings.sex !== "f" ? "selected" : ""}>Maschio</option><option value="f" ${settings.sex === "f" ? "selected" : ""}>Femmina</option></select></label>
         <button class="btn" type="submit">Salva</button>
       </form>
+      <div class="card">
+        <h2>🎨 Aspetto</h2>
+        <div class="segmented" style="margin-bottom:0">
+          ${[["auto", "📱 Automatico"], ["light", "☀️ Chiaro"], ["dark", "🌙 Scuro"]].map(([v, l]) => `<button class="${theme === v ? "on" : ""}" data-act="set-theme" data-v="${v}">${segLabel(l)}</button>`).join("")}
+        </div>
+        <p class="small muted" style="margin:8px 0 0">«Automatico» segue l'impostazione del telefono.</p>
+      </div>
       ${installCard(true)}
       <div class="card">
         <h2>💾 Backup e condivisione</h2>
@@ -1040,6 +1058,7 @@
       case "set": ui[t.dataset.k] = t.dataset.v; render(true); break;
       case "set-bool": ui[t.dataset.k] = t.dataset.v === "1"; render(true); break;
       case "toggle": ui[t.dataset.k] = !ui[t.dataset.k]; render(true); break;
+      case "set-theme": theme = t.dataset.v; S.set("theme", theme); applyTheme(); render(true); break;
       case "set-km": evKm = Number(t.dataset.v); S.set("evKm", evKm); render(true); break;
       case "set-sex": settings.sex = t.dataset.v; S.set("settings", settings); render(true); break;
       case "al-offer": offerToday(t.dataset.food); toast("Segnato ✅ Alla prossima settimana!"); render(true); break;

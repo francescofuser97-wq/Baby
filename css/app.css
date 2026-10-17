@@ -26,8 +26,9 @@
   color-scheme: light;
 }
 
+/* Tema scuro: automatico (segue il telefono) oppure scelto nelle Impostazioni */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1E1A18;
     --surface: #2A2421;
     --surface-2: #332B27;
@@ -52,6 +53,31 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .2);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #1E1A18;
+  --surface: #2A2421;
+  --surface-2: #332B27;
+  --ink: #F5ECE6;
+  --muted: #B8A79D;
+  --line: #3E3430;
+  --primary: #F08E72;
+  --primary-ink: #2A1A14;
+  --primary-soft: #4A2E25;
+  --green: #8CC7A9;
+  --green-soft: #22382E;
+  --yellow: #F1C75B;
+  --yellow-soft: #3E3420;
+  --blue: #93BCE6;
+  --blue-soft: #22303F;
+  --pink: #EE9DBA;
+  --pink-soft: #43262F;
+  --purple: #B9A3EE;
+  --purple-soft: #312A44;
+  --danger: #F08A8A;
+  --danger-soft: #462626;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 14px rgba(0, 0, 0, .2);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
