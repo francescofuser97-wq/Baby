@@ -11,7 +11,7 @@ Web app installabile (PWA) per accompagnare lo svezzamento e la crescita del bam
 - **Emergenze** (🆘 in alto): numeri utili, pronto soccorso vicini, disostruzione, febbre, ingestioni, ustioni.
 - **Eventi**: eventi e luoghi a misura di bebè intorno a Montecchio Maggiore, con mappa, aggiunta al calendario ed eventi personali.
 
-**Il tuo comune** (Impostazioni): le distanze di eventi e luoghi, le ricerche «vicino a te» (biblioteca, consultorio, pronto soccorso pediatrico, piscina, parchi, farmacia di turno) e il pronto soccorso più vicino si calcolano dal comune scelto, cercandolo per nome o con la posizione del telefono (OpenStreetMap). Il catalogo di eventi copre la zona di Montecchio Maggiore; per gli altri comuni l'app propone ricerche già pronte.
+**Il tuo comune** (Impostazioni): le distanze di eventi e luoghi, le ricerche «vicino a te» (biblioteca, consultorio, pronto soccorso pediatrico, piscina, parchi, farmacia di turno) e il pronto soccorso più vicino si calcolano dal comune scelto, cercandolo per nome o con la posizione del telefono (OpenStreetMap). In base al comune l'app riconosce anche l'**azienda sanitaria** (ASL, ULSS, ATS, ASP… in `js/data-asl.js`) e propone sito, consultorio, vaccinazioni, guardia medica e CUP. Gli **eventi** arrivano da due fonti: l'elenco curato per la zona di Montecchio Maggiore (aggiornato ogni settimana) e, per qualsiasi comune, le notizie di Google News su eventi per bambini lette dal servizio Google della famiglia (serve la condivisione attiva).
 
 **Più figli**: ogni figlio ha il suo profilo (selettore in alto con il nome). Diario, allergeni, crescita, agenda, giochi fatti e domande sono separati; preferiti, eventi, numeri di emergenza e tema sono in comune. L'agenda ha anche la vista «Tutta la famiglia».
 
@@ -25,6 +25,8 @@ In **Impostazioni → Condividi con la famiglia** l'app guida passo passo. In br
 2. **Esegui il deployment → Nuovo deployment → App web**, con «Esegui come: Me» e «Chi ha accesso: Chiunque». Autorizzi l'accesso al Drive e copi l'URL che finisce con `/exec`.
 3. Incolli l'URL nell'app e premi **Collega**. Poi **Invita qualcuno**: il messaggio contiene un codice `PP1-…` (o un link diretto).
 4. Chi riceve l'invito apre l'app, tocca **Ho un codice di invito** e lo incolla.
+
+Chi ha creato il servizio prima di ottobre 2026 deve aggiornarlo una volta (Impostazioni → Aggiorna il servizio Google: incolla il nuovo codice e pubblica una «Nuova versione»), per ricevere le notizie sugli eventi.
 
 I dati condivisi stanno in un file `piccoli-passi-….json` nel Drive di chi ha pubblicato lo script. Ogni telefono manda e riceve solo i dati cambiati; se due persone modificano lo stesso elemento vince la modifica più recente. Il codice di invito dà accesso ai dati: mandalo solo a persone di fiducia. Le foto dei piatti non vengono condivise.
 

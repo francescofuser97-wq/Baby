@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "3.1.0";
+  const VERSION = "3.2.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -313,7 +313,7 @@
   function tipsForAge(m) { const mm = Math.max(4, m); return TIPS.filter(t => t.min <= mm && t.max >= mm); }
 
   /* ---------------- Comune e distanze ---------------- */
-  const DEFAULT_HOME = { name: "Montecchio Maggiore", prov: "Vicenza", lat: 45.5049, lon: 11.4115 };
+  const DEFAULT_HOME = { name: "Montecchio Maggiore", prov: "Vicenza", region: "Veneto", lat: 45.5049, lon: 11.4115 };
   const homeOf = () => (home && home.lat != null ? home : DEFAULT_HOME);
   function haversine(a, b) {
     const R = 6371, rad = x => x * Math.PI / 180;
@@ -338,6 +338,71 @@
   const kmLabel = d => (d == null ? "" : d < 3 ? "vicino a te" : "~" + d + " km");
   const withinKm = e => { const d = distKm(e); return evKm === 0 || d == null || d <= evKm; };
   const googleUrl = q => "https://www.google.com/search?q=" + encodeURIComponent(q);
+  const myAsl = () => (window.aslFor ? aslFor(homeOf()) : null) || { name: "la vostra azienda sanitaria (ASL)", certain: false, site: null };
+
+  // Scheda dell'azienda sanitaria del comune scelto, con le ricerche già pronte
+  function aslCard() {
+    const a = myAsl(), h = homeOf(), n = a.certain ? a.name : "ASL " + h.name;
+    const rows = [
+      ["🌐", "Sito ufficiale", a.site || googleUrl(n + " sito ufficiale")],
+      ["🤱", "Consultorio familiare", mapsUrl("consultorio familiare vicino a " + h.name)],
+      ["💉", "Vaccinazioni pediatriche", googleUrl(n + " vaccinazioni pediatriche " + h.name)],
+      ["🌙", "Guardia medica (continuità assistenziale)", googleUrl("guardia medica " + h.name + " numero telefono")],
+      ["📞", "CUP – prenotazioni", googleUrl(n + " CUP prenotazioni numero")],
+      ["🍼", "Corsi e incontri per neogenitori", googleUrl(n + " incontri neogenitori svezzamento massaggio neonatale")]
+    ];
+    return `<div class="card"><div class="card-kicker">🏥 La vostra azienda sanitaria</div>
+      <h3 style="margin:0 0 4px">${esc(a.name)}</h3>
+      <p class="small muted" style="margin:0 0 6px">In base al comune: ${esc(h.name)}${a.certain ? "" : ". In questa zona ci sono più aziende: verifica qual è la vostra (la trovi sulla tessera sanitaria o chiedendo al pediatra)"}.</p>
+      ${rows.map(([e, t, u]) => `<a class="food" href="${u}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}</div>`;
+  }
+
+  // Notizie automatiche sugli eventi della zona (tramite il servizio Google della famiglia)
+  function feedQueries() {
+    const h = homeOf(), m = today0().getMonth();
+    const q = ["eventi bambini " + h.name + " when:30d", h.name + " spettacolo per bambini when:30d", h.name + " biblioteca letture bambini when:60d", h.name + " famiglie bambini weekend when:14d"];
+    if (m >= 10) q.push("Natale bambini " + h.name + " when:30d");
+    else if (m <= 1) q.push("Carnevale bambini " + h.name + " when:30d");
+    return q;
+  }
+  let feedLoading = false;
+  async function loadFeed(force) {
+    const cfg = raw.get("sync", null), h = homeOf();
+    if (!cfg || feedLoading) return;
+    const cached = raw.get("feed", null);
+    if (!force && cached && cached.place === h.name && Date.now() - cached.at < 6 * 3600e3) return;
+    feedLoading = true;
+    try {
+      const res = await fetch(cfg.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ key: cfg.key, action: "news", q: feedQueries() }) });
+      const data = await res.json();
+      if (!data || !Array.isArray(data.items)) throw new Error((data && data.error) || "risposta non valida");
+      const seen = {}, limit = Date.now() - 60 * 864e5;
+      const items = data.items.map(it => {
+        const t = String(it.t || "").replace(/\s+-\s+[^-]+$/, "").trim();
+        return { t, l: it.l, s: it.s || "", d: Date.parse(it.d) || 0 };
+      }).filter(it => it.t && /^https:\/\//.test(it.l || "") && it.d > limit && !seen[it.t.toLowerCase()] && (seen[it.t.toLowerCase()] = true))
+        .sort((a, b) => b.d - a.d).slice(0, 15);
+      raw.set("feed", { place: h.name, at: Date.now(), items, ok: true });
+    } catch (err) {
+      raw.set("feed", { place: h.name, at: Date.now(), items: (cached && cached.place === h.name ? cached.items : []), ok: false, err: String(err && err.message || err) });
+    } finally {
+      feedLoading = false;
+      if (/eventi/.test(location.hash) && sheet.hidden) render(true);
+    }
+  }
+  function feedCard() {
+    const h = homeOf();
+    if (!raw.get("sync", null)) return `<div class="card tint-blue small"><b>📰 Eventi della tua zona in automatico.</b> Attivando la condivisione con la famiglia (Impostazioni), l'app riceve ogni giorno le notizie su eventi e spettacoli per bambini nella zona di ${esc(h.name)}.</div>`;
+    const f = raw.get("feed", null);
+    if (!f || f.place !== h.name) { loadFeed(false); return `<div class="card small muted">📰 Cerco gli eventi nella zona di ${esc(h.name)}…</div>`; }
+    loadFeed(false);
+    const head = `<div class="card-kicker">📰 Dalla zona di ${esc(h.name)}, in automatico</div>`;
+    if (!f.items.length) return `<div class="card">${head}<p class="small muted" style="margin:0">${f.ok ? "Nessuna notizia recente su eventi per bambini." : (/codice|action|non valida/.test(f.err || "") ? "Per ricevere le notizie aggiorna il servizio Google (Impostazioni → Condivisione → Aggiorna il servizio)." : "Non riesco a leggere le notizie in questo momento.")}</p>
+      <button class="btn ghost small" data-act="feed-reload" style="margin-top:8px">🔄 Riprova</button></div>`;
+    return `<div class="card">${head}
+      ${f.items.map(it => `<a class="food" href="${esc(it.l)}" target="_blank" rel="noopener"><span class="st">🗞️</span><span class="grow">${esc(it.t)}<br><span class="small muted">${esc(it.s)}${it.d ? " · " + fmt(new Date(it.d), { day: "numeric", month: "short" }) : ""}</span></span><span class="muted">›</span></a>`).join("")}
+      <p class="small muted" style="margin:8px 0 0">Notizie trovate in automatico da Google News: controlla date e dettagli aprendo l'articolo. Se trovi un evento adatto, aggiungilo con «➕».</p></div>`;
+  }
   const isOngoing = e => e.start && e.end && parseISO(e.start) <= today0();
 
   function upcomingEvents() {
@@ -776,12 +841,12 @@
       const tbd = EVENTS.filter(e => !e.start && withinKm(e));
       const local = isLocalArea();
       body = `${homeLine}${kmChips}
-        ${!local ? `<div class="note small">Il nostro elenco di eventi copre la zona di Montecchio Maggiore e dintorni (Vicenza, Verona, Padova, Bassano). Per ${esc(h.name)} trovi qui sotto le ricerche già pronte, e puoi aggiungere gli eventi che trovi.</div>${searchCard}` : ""}
+        ${!local ? `${feedCard()}<div class="note small">L'elenco curato di eventi copre la zona di Montecchio Maggiore e dintorni (Vicenza, Verona, Padova, Bassano). Per ${esc(h.name)} trovi sopra le notizie automatiche e qui sotto le ricerche già pronte.</div>${searchCard}` : ""}
         ${local ? `<div class="note small">📌 Elenco aggiornato al ${fmt(parseISO(EVENTS_UPDATED), { day: "numeric", month: "long", year: "numeric" })}${staleDays > 30 ? ` (<b>più di un mese fa</b>: guarda anche le <a href="#/eventi" data-act="set" data-k="evTab" data-v="fonti">fonti</a>)` : ""}. Prima di andare <b>controlla sempre date e orari sul sito dell'organizzatore</b>.</div>` : ""}
         ${up.map(eventCard).join("") || `<div class="empty"><b>📅</b>Nessun evento in arrivo con data certa.</div>`}
         ${tbd.length ? `<div class="section-title"><h2>In arrivo, date da confermare</h2></div>${tbd.map(eventCard).join("")}` : ""}
         <button class="btn ghost block" data-act="ev-add" style="margin-top:8px">➕ Aggiungi un evento che hai trovato</button>
-        ${local ? `<div style="margin-top:14px">${searchCard}</div>` : ""}`;
+        ${local ? `<div style="margin-top:14px">${feedCard()}${searchCard}</div>` : ""}`;
     } else if (ui.evTab === "luoghi") {
       const places = PLACES.filter(withinKm).sort((a, b) => (distKm(a) || 0) - (distKm(b) || 0));
       const near = [
@@ -790,6 +855,7 @@
         ["🛝", "Parchi giochi", "parco giochi " + h.name], ["💊", "Farmacia di turno", "farmacia di turno " + h.name]
       ];
       body = `${homeLine}
+        ${aslCard()}
         <div class="card"><div class="card-kicker">🗺️ Vicino a te, sulla mappa</div>
           ${near.map(([e, t, q]) => `<a class="food" href="${q.startsWith("farmacia") ? googleUrl(q) : mapsUrl(q)}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}</div>
         ${places.length ? `<div class="section-title"><h2>Luoghi consigliati</h2></div>${kmChips}${places.map(placeCard).join("")}` : (isLocalArea() ? `${kmChips}<div class="empty"><b>📍</b>Nessun luogo consigliato in questo raggio.</div>` : "")}`;
@@ -1077,7 +1143,7 @@
         <p class="small muted" style="margin:10px 0 0">Età indicative: il calendario preciso lo concordi con il pediatra. Spunta quando l'avete fatto.</p></div>
       <div class="section-title"><h2>💉 Vaccinazioni</h2></div>
       <div class="card">${split(VACCINES.map(v => ({ id: "v:" + v.id, m: v.m, html: item("v:" + v.id, v.t, v.m, v.items.map(esc).join(" · ")) })))}
-        <p class="small muted" style="margin:10px 0 0">Calendario indicativo nazionale. ${isLocalArea() ? "La ULSS 8 Berica" : "La vostra ASL/ULSS"} vi manda la lettera di invito con data e ora: quando arriva, aggiungila come appuntamento. Per dubbi chiedi al pediatra o al servizio vaccinazioni.</p></div>`;
+        <p class="small muted" style="margin:10px 0 0">Calendario indicativo nazionale. ${myAsl().certain ? "L'" + esc(myAsl().name) : "La vostra azienda sanitaria"} vi manda la lettera di invito con data e ora: quando arriva, aggiungila come appuntamento. Per dubbi chiedi al pediatra o al servizio vaccinazioni.</p></div>`;
   }
 
   function openAddAppt() {
@@ -1127,7 +1193,7 @@
 
   function viewHealth() {
     const seg = (v, label) => `<button class="${ui.healthTab === v ? "on" : ""}" data-act="set" data-k="healthTab" data-v="${v}">${segLabel(label)}</button>`;
-    const body = ui.healthTab === "crescita" ? viewGrowth() : ui.healthTab === "domande" ? viewQuestions() : ui.healthTab === "cura" ? viewCare() : viewAgenda();
+    const body = ui.healthTab === "crescita" ? viewGrowth() : ui.healthTab === "domande" ? viewQuestions() : ui.healthTab === "cura" ? viewCare() : viewAgenda() + aslCard();
     return `<a class="card list-card" href="#/emergenze" style="background:var(--danger-soft);border-color:transparent">
         <div class="big-emoji">🆘</div><div class="grow"><h3>Emergenze</h3><div class="meta">Numeri utili, soffocamento, febbre, pronto soccorso</div></div><span class="muted">›</span></a>
       <div class="segmented">${seg("agenda", "📅 Agenda")}${seg("crescita", "📈 Crescita")}${seg("domande", "❓ Domande")}${seg("cura", "🧴 Come si fa")}</div>${body}`;
@@ -1150,7 +1216,7 @@
           <label class="field"><span>Nome del pediatra</span><input type="text" name="pedName" value="${esc(c.pedName || "")}"></label>
           <label class="field"><span>Telefono del pediatra</span><input type="tel" name="pedTel" value="${esc(c.pedTel || "")}"></label>
           <label class="field"><span>Guardia medica (continuità assistenziale)</span><input type="tel" name="gmTel" value="${esc(c.gmTel || "")}">
-            <small class="muted" style="font-weight:400">Trovi il numero sul <a href="https://www.aulss8.veneto.it/" target="_blank" rel="noopener">sito dell'ULSS 8 Berica</a> o chiedilo al pediatra.</small></label>
+            <small class="muted" style="font-weight:400">Il numero dipende dalla zona: <a href="${googleUrl("guardia medica " + homeOf().name + " numero telefono")}" target="_blank" rel="noopener">cercalo per ${esc(homeOf().name)}</a> (${esc(myAsl().name)}) o chiedilo al pediatra.</small></label>
           <label class="field"><span>Altro contatto (es. nonni)</span><input type="text" name="otherName" value="${esc(c.otherName || "")}" placeholder="Nome"></label>
           <label class="field"><input type="tel" name="otherTel" value="${esc(c.otherTel || "")}" placeholder="Telefono"></label>
           <button class="btn" type="submit">Salva</button>
@@ -1307,7 +1373,7 @@
   // "var" perché queste variabili servono già durante l'avvio (prima che il codice arrivi qui)
   var SYNC_KID_MAPS = ["foods", "ready", "done", "health"];
   var SYNC_KID_LISTS = ["growth", "appts", "questions"];
-  var SYNC_LOCAL_ONLY = ["sync", "activeKid", "evKm", "theme", "installDismissed"];
+  var SYNC_LOCAL_ONLY = ["sync", "activeKid", "evKm", "theme", "installDismissed", "feed"];
   var syncing = false, syncTimer = null, applyingRemote = false, pendingRender = false;
   const hashStr = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return (h >>> 0).toString(36) + str.length.toString(36); };
   function onLocalChange(k) {
@@ -1421,6 +1487,7 @@
           <button class="btn ghost" data-act="sync-now">🔄 Sincronizza ora</button>
         </div>
         <button class="btn ghost block" data-act="sync-newfamily" style="margin-top:10px">🏠 Crea uno spazio per un'altra famiglia</button>
+        <button class="btn ghost block" data-act="sync-update" style="margin-top:8px">🛠️ Aggiorna il servizio Google</button>
         <p class="small muted" style="margin:10px 0 0">Le foto dei piatti restano solo sul telefono che le ha scattate. Il codice di invito dà accesso a tutti i dati: mandalo solo a persone di fiducia.</p>
         <button class="btn danger small" data-act="sync-leave" style="margin-top:8px">Scollega questo telefono</button>
       </div>`;
@@ -1440,6 +1507,18 @@
         <label class="field"><span>URL dell'app web</span><input type="text" inputmode="url" autocapitalize="off" autocorrect="off" name="url" required placeholder="https://script.google.com/macros/s/…/exec"></label>
         <div class="btn-row"><button class="btn" type="submit" style="flex:1">Collega</button><button class="btn ghost" type="button" data-act="close">Annulla</button></div>
       </form>`);
+  }
+  // Per chi ha pubblicato una versione precedente del servizio (serve per le notizie sugli eventi)
+  function openSyncUpdate() {
+    openSheet(`<h2>🛠️ Aggiorna il servizio Google</h2>
+      <p class="small">Serve solo a chi ha creato il servizio (non a chi è stato invitato), quando l'app lo chiede. L'indirizzo non cambia e nessuno deve rifare l'invito.</p>
+      <ol class="steps small">
+        <li>Apri il progetto «Piccoli Passi» su <a href="https://script.google.com/home" target="_blank" rel="noopener">script.google.com</a>.</li>
+        <li>Cancella il codice e incolla quello nuovo: <button class="btn ghost small" data-act="sync-copy-script" type="button">📋 Copia il codice</button></li>
+        <li>Premi <b>Esegui il deployment → Gestisci deployment</b>, tocca la matita ✏️, in «Versione» scegli <b>Nuova versione</b> e premi <b>Esegui il deployment</b>.</li>
+        <li>Se Google lo chiede, autorizza di nuovo: ora il servizio legge anche le notizie (Google News).</li>
+      </ol>
+      <div class="btn-row"><button class="btn" data-act="feed-reload" style="flex:1">Fatto, prova le notizie</button><button class="btn ghost" data-act="close">Chiudi</button></div>`);
   }
   function openSyncJoin(prefill) {
     openSheet(`<h2>👨‍👩‍👧 Unisciti alla famiglia</h2>
@@ -1509,11 +1588,11 @@
     const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=it&addressdetails=1&limit=10&accept-language=it&q=" + encodeURIComponent(q));
     const list = await r.json();
     const seen = {};
-    return list.map(x => ({ name: placeName(x.address) || x.name, prov: (x.address && (x.address.county || x.address.state_district)) || "", region: (x.address && x.address.state) || "", lat: Number(x.lat), lon: Number(x.lon) }))
+    return list.map(x => ({ name: placeName(x.address) || x.name, prov: (x.address && (x.address.county || x.address.state_district || x.address.province)) || "", region: (x.address && x.address.state) || "", lat: Number(x.lat), lon: Number(x.lon) }))
       .filter(x => x.name && !seen[x.name + x.prov] && (seen[x.name + x.prov] = true));
   }
   function setHome(h) {
-    home = { name: h.name, prov: (h.prov || "").replace(/^Provincia di /, ""), lat: Number(h.lat.toFixed(4)), lon: Number(h.lon.toFixed(4)) };
+    home = { name: h.name, prov: (h.prov || "").replace(/^Provincia di /, ""), region: h.region || "", lat: Number(h.lat.toFixed(4)), lon: Number(h.lon.toFixed(4)) };
     S.set("home", home); closeSheet(); toast("Comune impostato: " + home.name + " 📍"); render(true);
   }
   function useMyPosition() {
@@ -1521,13 +1600,13 @@
     toast("Cerco la tua posizione…");
     navigator.geolocation.getCurrentPosition(async pos => {
       const lat = pos.coords.latitude, lon = pos.coords.longitude;
-      let name = "La tua zona", prov = "";
+      let name = "La tua zona", prov = "", region = "";
       try {
         const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language=it&lat=" + lat + "&lon=" + lon);
         const j = await r.json();
-        name = placeName(j.address) || name; prov = (j.address && (j.address.county || j.address.state_district)) || "";
+        name = placeName(j.address) || name; prov = (j.address && (j.address.county || j.address.state_district || j.address.province)) || ""; region = (j.address && j.address.state) || "";
       } catch (e) { /* senza connessione resta «La tua zona» */ }
-      setHome({ name, prov, lat, lon });
+      setHome({ name, prov, region, lat, lon });
     }, () => toast("Non ho il permesso di leggere la posizione: cerca il comune per nome"), { timeout: 15000, maximumAge: 600000 });
   }
 
@@ -1609,6 +1688,8 @@
       case "sync-now": syncNow(true); break;
       case "sync-invite": openInvite(); break;
       case "sync-newfamily": openNewFamily(); break;
+      case "sync-update": openSyncUpdate(); break;
+      case "feed-reload": closeSheet(); toast("Cerco le notizie…"); loadFeed(true); break;
       case "sync-copy-script": toast(await copyText(SYNC_SCRIPT) ? "Codice copiato 📋 Incollalo in Apps Script" : "Non riesco a copiare: lo trovi nel file sync/piccoli-passi-sync.gs"); break;
       case "sync-copy-invite": toast(await copyText(sheet.dataset.invite || "") ? "Invito copiato 📋" : "Seleziona il testo e copialo"); break;
       case "sync-share":

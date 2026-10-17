@@ -3,6 +3,8 @@
  *
  * I dati condivisi vengono salvati in un file nel Google Drive di chi pubblica questo script.
  * Ogni famiglia ha un codice segreto: solo chi lo conosce può leggere e scrivere i dati.
+ * Il servizio legge anche le notizie di Google News sugli eventi per bambini del comune scelto
+ * (l'app da sola non può farlo, perché i browser bloccano queste richieste).
  *
  * Pubblicazione: Esegui il deployment → Nuovo deployment → App web
  *   Esegui come: Me · Chi ha accesso: Chiunque
@@ -20,6 +22,7 @@ function doPost(e) {
     var req = JSON.parse(e.postData.contents || '{}');
     var key = String(req.key || '');
     if (key.length < 20) return json_({ error: 'codice non valido' });
+    if (req.action === 'news') return json_(news_(req.q));
 
     var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, key);
     var name = FILE_PREFIX + Utilities.base64EncodeWebSafe(digest).replace(/=+$/, '').slice(0, 32) + '.json';
@@ -57,6 +60,33 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/* Notizie da Google News per alcune ricerche (max 5), tenute in memoria per 3 ore */
+function news_(queries) {
+  var cache = CacheService.getScriptCache();
+  var items = [];
+  (queries || []).slice(0, 5).forEach(function (q) {
+    q = String(q).slice(0, 150);
+    var ck = 'n:' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, q));
+    var hit = cache.get(ck);
+    if (hit) { items = items.concat(JSON.parse(hit)); return; }
+    var found = [];
+    try {
+      var url = 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=it&gl=IT&ceid=IT:it';
+      var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+      if (res.getResponseCode() === 200) {
+        var channel = XmlService.parse(res.getContentText()).getRootElement().getChild('channel');
+        channel.getChildren('item').slice(0, 10).forEach(function (it) {
+          var src = it.getChild('source');
+          found.push({ t: it.getChildText('title'), l: it.getChildText('link'), d: it.getChildText('pubDate'), s: src ? src.getText() : '' });
+        });
+      }
+    } catch (err) { /* ricerca saltata */ }
+    try { cache.put(ck, JSON.stringify(found), 10800); } catch (err) { /* troppo grande per la cache */ }
+    items = items.concat(found);
+  });
+  return { items: items };
 }
 
 function json_(o) {
