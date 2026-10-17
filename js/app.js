@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.4.0";
+  const VERSION = "4.5.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -652,18 +652,18 @@
     }
 
     return `
-      ${a ? `<a class="mh-banner" href="#/mese">
+      ${a ? `<a class="mh-card" href="#/mese" aria-label="Apri l'aggiornamento del mese">
         <figure>${window.babyArt ? babyArt(a.m) : ""}</figure>
         <span class="mh-name">${name()}</span>
         <span class="mh-day">Giorno ${a.total + 1}</span>
-        <span class="mh-open">Apri <i>▶</i></span>
+        ${a.m <= 24 ? `<span class="mh-badge"><b>${a.m}</b><small>${a.m === 1 ? "mese" : "mesi"}</small></span>` : ""}
+        <span class="mh-body">
+          <b class="mh-age">${name()} ha ${ageText(a)}</b>
+          <span class="small muted">${plural(a.w, "settimana", "settimane")} · ${settings.sex === "f" ? "nata" : "nato"} il ${fmt(a.birth, { day: "numeric", month: "long", year: "numeric" })}</span>
+          ${progress}
+          <span class="mh-foot"><span>${a.m <= 24 ? "📆 Il tuo aggiornamento del mese" : "📆 Mese per mese"}</span><span class="mh-open">Apri <i>▶</i></span></span>
+        </span>
       </a>` : ""}
-      <div class="card mh-prog">
-        <div class="mh-prog-top"><h3>${name()} ha ${ageText(a)}</h3><a href="#/impostazioni" class="small">Modifica</a></div>
-        <div class="small muted">${a ? plural(a.w, "settimana", "settimane") + " · " + (settings.sex === "f" ? "nata" : "nato") + " il " + fmt(a.birth, { day: "numeric", month: "long", year: "numeric" }) : ""}</div>
-        ${progress}
-      </div>
-      ${monthTodayCard()}
 
       <a class="card tint-green" href="${ph.link}">
         <div class="card-kicker">${ph.e} Fase attuale</div>
@@ -1646,20 +1646,6 @@
 
   /* ---------------- Mese per mese ---------------- */
   const monthEntry = m => MONTH_GUIDE.find(e => m >= e.m && m <= e.to) || MONTH_GUIDE[MONTH_GUIDE.length - 1];
-  const CONFETTI = (() => {
-    const cols = ["#F2A33A", "#F4C542", "#E86A8A", "#8B6FD6", "#5BB3E6", "#6CC08B"];
-    return Array.from({ length: 22 }, (_, i) => {
-      const x = i % 2 ? 2 + (i * 37) % 26 : 70 + (i * 29) % 26, y = (i * 53 + 7) % 88, r = (i * 47) % 180, c = cols[i % cols.length];
-      return i % 5 === 0 ? `<i style="left:${x}%;top:${y}%;transform:rotate(${r}deg);border-color:${c}" class="zz"></i>` : `<i style="left:${x}%;top:${y}%;transform:rotate(${r}deg);background:${c}"></i>`;
-    }).join("");
-  })();
-  function monthTodayCard() {
-    const a = age();
-    if (!a || a.m > 24) return "";
-    return `<a class="mh-update" href="#/mese"><span class="mh-conf" aria-hidden="true">${CONFETTI}</span>
-      <span class="mh-num">${a.m}</span><span class="mh-unit">${a.m === 1 ? "MESE" : "MESI"}</span>
-      <span class="mh-row"><b>Il tuo aggiornamento del mese</b><span class="mh-btn">Apri</span></span></a>`;
-  }
   // Peso e lunghezza del mese: l'ultima misura del bimbo se recente, altrimenti la mediana OMS per età e sesso
   function monthStats(e, isCur) {
     const g = (window.GROWTH || {})[settings && settings.sex === "f" ? "girls" : "boys"] || {}, mo = Math.min(24, e.m);
