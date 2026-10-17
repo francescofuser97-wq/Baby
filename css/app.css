@@ -523,3 +523,58 @@ body.immersive main { padding-top: 0; }
 .cook-nav .btn { flex: 1; padding: 15px; font-size: 1.05rem; }
 .cook-timer { padding: 8px 12px; border: 0; border-radius: 99px; background: var(--primary-soft); color: var(--primary); font-weight: 800; font-size: 1rem; font-variant-numeric: tabular-nums; cursor: pointer; }
 .section-title .link-btn { font-size: .9rem; }
+
+/* ---------- Mese per mese: riquadro in «Oggi», aggiornamento del mese, pagina del mese ---------- */
+.mh-banner { position: relative; display: block; margin: 8px 0 14px; aspect-ratio: 1 / 1.02; max-height: 420px; width: 100%; border-radius: 22px; overflow: hidden; color: #fff; text-decoration: none; box-shadow: 0 2px 8px rgba(60, 40, 25, .1), 0 12px 30px rgba(60, 40, 25, .14); }
+.mh-banner figure { margin: 0; position: absolute; inset: 0; }
+.mh-banner svg { display: block; width: 100%; height: 100%; }
+.mh-banner::before, .mh-banner::after { content: ""; position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none; }
+.mh-banner::before { top: 0; height: 32%; background: linear-gradient(rgba(40, 22, 14, .42), rgba(40, 22, 14, 0)); }
+.mh-banner::after { bottom: 0; height: 36%; background: linear-gradient(rgba(40, 22, 14, 0), rgba(40, 22, 14, .5)); }
+.mh-name { position: absolute; z-index: 2; top: 16px; left: 22px; right: 22px; font-size: 2.2rem; font-weight: 700; line-height: 1.1; text-shadow: 0 1px 6px rgba(0, 0, 0, .25); }
+.mh-day { position: absolute; z-index: 2; left: 22px; bottom: 20px; font-size: 2rem; font-weight: 600; text-shadow: 0 1px 6px rgba(0, 0, 0, .3); }
+.mh-open { position: absolute; z-index: 2; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 10px; padding: 7px 7px 7px 18px; border-radius: 99px; background: rgba(255, 255, 255, .75); color: #2B201B; font-size: 1.15rem; font-weight: 600; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.mh-open i { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: rgba(0, 0, 0, .1); font-style: normal; font-size: .85rem; }
+.mh-prog-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.mh-prog-top h3 { margin: 0 0 2px; font-size: 1.2rem; }
+.mh-prog-top a { text-decoration: none; font-weight: 700; }
+.mh-prog .progress { margin: 12px 0 2px; background: var(--surface-2); }
+.mh-update { position: relative; display: block; margin: 0 0 14px; padding: 22px 18px 18px; overflow: hidden; border-radius: 22px; text-align: center; text-decoration: none; color: var(--pink); background: var(--pink-soft); box-shadow: var(--shadow); }
+.mh-conf { position: absolute; inset: 6px 10px 64px; pointer-events: none; }
+.mh-conf i { position: absolute; width: 14px; height: 6px; border-radius: 2px; opacity: .85; }
+.mh-conf i.zz { width: 18px; height: 8px; border: 3px solid; border-width: 0 0 3px 3px; border-radius: 0; background: none; }
+.mh-num { position: relative; display: block; font-size: 4.2rem; font-weight: 800; line-height: 1; }
+.mh-unit { position: relative; display: block; font-size: 1.5rem; font-weight: 700; letter-spacing: .02em; }
+.mh-row { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; text-align: left; }
+.mh-row b { font-size: 1.3rem; font-weight: 600; line-height: 1.2; }
+.mh-btn { flex: none; padding: 8px 20px; border-radius: 99px; background: var(--pink); color: #fff; font-weight: 700; }
+
+.mt-tabs { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 14px; padding: 4px 16px 0; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.mt-tabs::-webkit-scrollbar { display: none; }
+.mt-tabs a { flex: none; min-width: 52px; padding: 6px 10px 10px; text-align: center; color: var(--ink); text-decoration: none; border-bottom: 3px solid transparent; }
+.mt-tabs a b { display: block; font-size: 1.35rem; font-weight: 500; }
+.mt-tabs a.cur b::after { content: "•"; color: var(--purple); margin-left: 2px; }
+.mt-tabs a small { display: block; font-size: .68rem; font-weight: 700; letter-spacing: .04em; }
+.mt-tabs a.on { color: var(--blue); border-bottom-color: var(--blue); }
+.mt-tabs a.on b { font-weight: 800; }
+.mt-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.mt-img { aspect-ratio: 1; border-radius: 18px; overflow: hidden; }
+.mt-img svg { display: block; width: 100%; height: 100%; }
+.mt-stats { position: relative; aspect-ratio: 1; display: flex; flex-direction: column; justify-content: center; padding: 14px 16px; border: 0; border-radius: 18px; text-align: left; cursor: pointer; background: var(--pink-soft); color: var(--pink); font: inherit; }
+.mt-arrow { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--pink); color: #fff; font-size: 1.3rem; line-height: 1; padding-bottom: 2px; }
+.mt-v { font-size: 2rem; font-weight: 800; line-height: 1.05; }
+.mt-v small { font-size: 1rem; font-weight: 700; }
+.mt-k { font-size: .92rem; font-weight: 600; margin-bottom: 8px; }
+.mt-src { font-size: .7rem; opacity: .8; line-height: 1.2; }
+.mt-title { margin: 0 0 6px; font-size: 1.75rem; }
+.mt-intro { margin: 8px 0 4px; font-size: 1.08rem; color: var(--muted); line-height: 1.6; }
+.mt-h { margin: 24px 0 8px; font-size: 1.1rem; }
+.mt-p { color: var(--muted); font-size: 1.05rem; line-height: 1.65; }
+.mt-p b { color: var(--ink); font-weight: 700; }
+.mt-h2 { margin: 30px 0 12px; font-size: 1.45rem; }
+.mt-acts { display: flex; gap: 12px; overflow-x: auto; margin: 0 -16px 16px; padding: 2px 16px 8px; scrollbar-width: none; }
+.mt-acts::-webkit-scrollbar { display: none; }
+.mt-acts a { flex: 0 0 150px; display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; }
+.mt-ae { display: grid; place-items: center; height: 84px; border-radius: 12px; background: var(--purple-soft); font-size: 2.4rem; margin-bottom: 4px; }
+.mt-acts b { font-size: .92rem; line-height: 1.25; }
+.mt-acts small { color: var(--muted); font-size: .78rem; }

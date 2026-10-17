@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.3.3";
+  const VERSION = "4.4.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -180,7 +180,7 @@
   }
 
   /* ---------------- Router ---------------- */
-  const TITLES = { oggi: "Piccoli Passi", ricette: "Ricette", ricetta: "Ricetta", guida: "Guida allo svezzamento", sezione: "Guida", diario: "Diario dei cibi", giochi: "Giochi e crescita", attivita: "Gioco", eventi: "Eventi e luoghi", impostazioni: "Impostazioni", allergeni: "Percorso allergeni", salute: "Salute", emergenze: "Emergenze", mese: "Mese per mese" };
+  const TITLES = { oggi: "Piccoli Passi", ricette: "Ricette", ricetta: "Ricetta", guida: "Guida allo svezzamento", sezione: "Guida", diario: "Diario dei cibi", giochi: "Giochi e crescita", attivita: "Gioco", eventi: "Eventi e luoghi", impostazioni: "Impostazioni", allergeni: "Percorso allergeni", salute: "Salute", emergenze: "Emergenze", mese: "Info mensili" };
   const PARENT = { ricetta: "#/ricette", sezione: "#/guida", diario: "#/guida", attivita: "#/giochi", impostazioni: "#/oggi", allergeni: "#/guida", emergenze: "#/salute", mese: "#/giochi" };
   const TAB_OF = { ricetta: "ricette", sezione: "guida", diario: "guida", attivita: "giochi", allergeni: "guida", emergenze: "salute", mese: "giochi" };
 
@@ -622,12 +622,13 @@
     const a = age();
     const m = ageM();
     const ph = phase(m);
+    // Avanzamento verso il prossimo mese compiuto (prima dei 6 mesi: verso l'inizio dello svezzamento)
     let progress = "";
-    if (a && a.m < 6) {
-      const left = daysBetween(today0(), a.six);
-      const pct = Math.min(100, Math.round(a.total / daysBetween(a.birth, a.six) * 100));
-      progress = `<div class="progress" aria-hidden="true"><i style="width:${pct}%"></i></div>
-        <div class="small"><b>${left === 0 ? "Oggi compie 6 mesi! 🎉" : "Mancano " + plural(left, "giorno", "giorni") + " ai 6 mesi"}</b> · ${fmt(a.six)}</div>`;
+    if (a) {
+      const from = addMonths(a.birth, a.m), to = addMonths(a.birth, a.m + 1), left = daysBetween(today0(), to);
+      const pct = Math.min(100, Math.round(daysBetween(from, today0()) / Math.max(1, daysBetween(from, to)) * 100));
+      progress = `<div class="small muted">${a.m + 1 === 6 ? "Mancano " + plural(left, "giorno", "giorni") + " ai 6 mesi: si avvicina lo svezzamento" : "Tra " + plural(left, "giorno", "giorni") + " compie " + plural(a.m + 1, "mese", "mesi")} · ${fmt(to)}</div>
+        <div class="progress" aria-hidden="true"><i style="width:${pct}%"></i></div>`;
     }
     const tip = pick(tipsForAge(m), 0);
     const recPool = recipesForAge(m);
@@ -651,19 +652,25 @@
     }
 
     return `
-      <section class="hero">
-        <div class="hello">Ciao! 👋</div>
-        <h1>${name()} ha ${ageText(a)}</h1>
+      ${a ? `<a class="mh-banner" href="#/mese">
+        <figure>${window.babyArt ? babyArt(a.m) : ""}</figure>
+        <span class="mh-name">${name()}</span>
+        <span class="mh-day">Giorno ${a.total + 1}</span>
+        <span class="mh-open">Apri <i>▶</i></span>
+      </a>` : ""}
+      <div class="card mh-prog">
+        <div class="mh-prog-top"><h3>${name()} ha ${ageText(a)}</h3><a href="#/impostazioni" class="small">Modifica</a></div>
         <div class="small muted">${a ? plural(a.w, "settimana", "settimane") + " · " + (settings.sex === "f" ? "nata" : "nato") + " il " + fmt(a.birth, { day: "numeric", month: "long", year: "numeric" }) : ""}</div>
         ${progress}
-      </section>
+      </div>
+      ${monthTodayCard()}
 
       <a class="card tint-green" href="${ph.link}">
         <div class="card-kicker">${ph.e} Fase attuale</div>
         <h3>${ph.t}</h3>
         <p class="small">${ph.d}</p>
       </a>
-      ${monthTodayCard()}
+      
 
       <div class="quick">
         <a href="#/salute"><span>🩺</span>Salute</a><a href="#/allergeni"><span>⚠️</span>Allergeni</a><a href="#/emergenze"><span>🆘</span>Emergenze</a>
@@ -1639,33 +1646,67 @@
 
   /* ---------------- Mese per mese ---------------- */
   const monthEntry = m => MONTH_GUIDE.find(e => m >= e.m && m <= e.to) || MONTH_GUIDE[MONTH_GUIDE.length - 1];
+  const CONFETTI = (() => {
+    const cols = ["#F2A33A", "#F4C542", "#E86A8A", "#8B6FD6", "#5BB3E6", "#6CC08B"];
+    return Array.from({ length: 22 }, (_, i) => {
+      const x = i % 2 ? 2 + (i * 37) % 26 : 70 + (i * 29) % 26, y = (i * 53 + 7) % 88, r = (i * 47) % 180, c = cols[i % cols.length];
+      return i % 5 === 0 ? `<i style="left:${x}%;top:${y}%;transform:rotate(${r}deg);border-color:${c}" class="zz"></i>` : `<i style="left:${x}%;top:${y}%;transform:rotate(${r}deg);background:${c}"></i>`;
+    }).join("");
+  })();
   function monthTodayCard() {
     const a = age();
     if (!a || a.m > 24) return "";
-    const e = monthEntry(a.m);
-    return `<a class="card tint-purple" href="#/mese"><div class="card-kicker">📆 Il mese di ${name()} · ${esc(e.t)}</div>
-      <p class="small" style="margin-bottom:6px">${esc(e.intro)}</p>
-      <div>${e.items.map(it => `<span class="tag purple">${it.e} ${esc(it.t)}</span>`).join("")}</div></a>`;
+    return `<a class="mh-update" href="#/mese"><span class="mh-conf" aria-hidden="true">${CONFETTI}</span>
+      <span class="mh-num">${a.m}</span><span class="mh-unit">${a.m === 1 ? "MESE" : "MESI"}</span>
+      <span class="mh-row"><b>Il tuo aggiornamento del mese</b><span class="mh-btn">Apri</span></span></a>`;
+  }
+  // Peso e lunghezza del mese: l'ultima misura del bimbo se recente, altrimenti la mediana OMS per età e sesso
+  function monthStats(e, isCur) {
+    const g = (window.GROWTH || {})[settings && settings.sex === "f" ? "girls" : "boys"] || {}, mo = Math.min(24, e.m);
+    const med = k => (g[k] && g[k][mo] ? g[k][mo][1] : null);
+    let w = med("weight"), l = med("length"), src = "valori medi OMS " + (mo ? "a " + plural(mo, "mese", "mesi") : "alla nascita");
+    if (isCur) {
+      const last = growth.slice().sort((x, y) => y.date.localeCompare(x.date));
+      const lw = last.find(x => x.w), ll = last.find(x => x.l), recent = x => x && daysBetween(parseISO(x.date), today0()) <= 45;
+      if (recent(lw) || recent(ll)) { if (recent(lw)) w = lw.w; if (recent(ll)) l = ll.l; src = "le misure di " + name(); }
+    }
+    const num = (v, d) => (v == null ? "–" : v.toLocaleString("it-IT", { minimumFractionDigits: d, maximumFractionDigits: d }));
+    return { w: num(w, w != null && w < 10 ? 2 : 1), l: num(l, 1), src };
   }
   function viewMonth(id) {
     const m = ageM();
     const cur = monthEntry(m);
     const idx = id != null && id !== "" ? Math.max(0, Math.min(MONTH_GUIDE.length - 1, Number(id))) : MONTH_GUIDE.indexOf(cur);
-    const e = MONTH_GUIDE[idx];
+    const e = MONTH_GUIDE[idx], isCur = e === cur;
     const prev = MONTH_GUIDE[idx - 1], next = MONTH_GUIDE[idx + 1];
+    const st = monthStats(e, isCur);
+    const label = x => (x.m === x.to ? String(x.m) : x.m + "-" + x.to);
+    const acts = activitiesForAge(e.m).slice(0, 8);
     return `
-      <div class="chips" id="monthChips">${MONTH_GUIDE.map((x, i) => `<a class="chip ${i === idx ? "on" : ""}" href="#/mese/${i}" style="text-decoration:none">${x === cur ? "📍 " : ""}${esc(x.t.replace("Il primo mese", "0 mesi"))}</a>`).join("")}</div>
-      <div class="article-hero" style="padding-top:6px"><h1>${esc(e.t)}</h1><p class="muted">${esc(e.intro)}</p>
-        ${e === cur ? `<span class="tag purple">📍 L'età di ${name()}</span>` : ""}</div>
-      ${e.items.map(it => `<div class="card">
-        <h2 style="margin-bottom:8px">${it.e} ${esc(it.t)}</h2>
-        <div class="card-kicker">👀 Cosa aspettarsi</div><p>${esc(it.expect)}</p>
-        <div class="card-kicker">🤝 Come affrontarlo</div><p>${esc(it.how)}</p></div>`).join("")}
+      <nav class="mt-tabs" id="monthChips" aria-label="Mesi">${MONTH_GUIDE.map((x, i) => `<a class="${i === idx ? "on" : ""}${x === cur ? " cur" : ""}" href="#/mese/${i}"><b>${label(x)}</b>${i === idx ? `<small>${x.to === 1 && x.m === 1 ? "MESE" : "MESI"}</small>` : ""}</a>`).join("")}</nav>
+      <div class="mt-tiles">
+        <div class="mt-img">${window.babyArt ? babyArt(e.m) : ""}</div>
+        <button class="mt-stats" data-act="go-growth" aria-label="Apri le curve di crescita">
+          <span class="mt-arrow">›</span>
+          <span class="mt-v">${st.w}<small> kg</small></span><span class="mt-k">Peso</span>
+          <span class="mt-v">${st.l}<small> cm</small></span><span class="mt-k">Lunghezza</span>
+          <span class="mt-src">${esc(st.src)}</span>
+        </button>
+      </div>
+      <h1 class="mt-title">${e.m === 0 ? "Il primo mese di vita" : esc(e.t) + " di vita"}</h1>
+      ${isCur ? `<span class="tag purple">📍 L'età di ${name()}</span>` : ""}
+      <p class="mt-intro">${esc(e.intro)}</p>
+      ${e.items.map(it => `<h3 class="mt-h">${it.e} ${esc(it.t)}</h3>
+        <p class="mt-p"><b>Cosa aspettarsi.</b> ${esc(it.expect)}</p>
+        <p class="mt-p"><b>Come affrontarlo.</b> ${esc(it.how)}</p>`).join("")}
+      <h3 class="mt-h">Nota finale</h3>
+      <p class="mt-p">Sono tendenze medie: ogni bambino ha i suoi tempi, e qualche settimana di anticipo o di ritardo è normale. Per qualsiasi dubbio sul sonno, la crescita o lo sviluppo, parlane con il pediatra.</p>
+      ${acts.length ? `<h2 class="mt-h2">I giochi di questo mese</h2>
+        <div class="mt-acts">${acts.map(x => `<a href="#/attivita/${x.id}"><span class="mt-ae">${x.e}</span><b>${esc(x.t)}</b><small>${esc(x.dur)}</small></a>`).join("")}</div>` : ""}
       <div class="btn-row" style="justify-content:space-between">
         ${prev ? `<a class="btn ghost small" href="#/mese/${idx - 1}">‹ ${esc(prev.t)}</a>` : "<span></span>"}
         ${next ? `<a class="btn ghost small" href="#/mese/${idx + 1}">${esc(next.t)} ›</a>` : ""}
-      </div>
-      <p class="disclaimer">Sono tendenze medie: ogni bambino ha i suoi tempi. Per qualsiasi dubbio sul sonno, la crescita o lo sviluppo, parlane con il pediatra.</p>`;
+      </div>`;
   }
 
   /* ---------------- Foto delle ricette (salvate sul telefono) ---------------- */
@@ -2351,6 +2392,7 @@
       case "sync-join": openSyncJoin(""); break;
       case "sync-now": syncNow(true); break;
       case "sync-check": openSyncCheck(); break;
+      case "go-growth": ui.healthTab = "crescita"; location.hash = "#/salute"; break;
       case "sync-invite": openInvite(); break;
       case "sync-newfamily": openNewFamily(); break;
       case "sync-update": openSyncUpdate(); break;
