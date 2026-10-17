@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.2.0";
+  const VERSION = "4.3.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -217,7 +217,7 @@
     const tmp = document.createElement("div");
     tmp.innerHTML = viewHtml(parseRoute());
     const next = tmp.querySelector("#results");
-    if (next) cur.replaceWith(next);
+    if (next) { cur.replaceWith(next); hydratePhotos(); wireCarousel(app); }
   }
 
   function render(keepScroll) {
@@ -225,6 +225,9 @@
     const y = window.scrollY;
     app.innerHTML = viewHtml(r);
     hydratePhotos();
+    wireCarousel(app);
+    // scheda ricetta a tutto schermo: immagine in alto con i pulsanti sopra, senza barra superiore
+    document.body.classList.toggle("immersive", r.view === "ricetta" && settings != null);
     const mc = app.querySelector("#monthChips"), mon = mc && mc.querySelector(".on");
     if (mon) mc.scrollLeft = mon.offsetLeft - mc.clientWidth / 2 + mon.offsetWidth / 2;
     const tab = TAB_OF[r.view] || r.view;
@@ -243,12 +246,13 @@
     if (keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
   }
 
-  document.getElementById("btnBack").addEventListener("click", () => {
+  function goBack() {
     const r = parseRoute();
     if (sessionStorage.getItem("pp.nav")) history.back();
     else location.hash = PARENT[r.view] || "#/oggi";
-  });
-  window.addEventListener("hashchange", () => { sessionStorage.setItem("pp.nav", "1"); closeSheet(); render(false); });
+  }
+  document.getElementById("btnBack").addEventListener("click", goBack);
+  window.addEventListener("hashchange", () => { sessionStorage.setItem("pp.nav", "1"); closeSheet(); if (cook) closeCook(); render(false); });
   window.addEventListener("scroll", () => document.querySelector(".topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
 
   /* ---------------- Profili dei figli ---------------- */
@@ -680,17 +684,55 @@
   }
 
   /* ---------------- Ricette ---------------- */
+  const BIMBY = window.BIMBY || {};
+  let cookMode = raw.get("cookMode", "classica");   // «classica» o «bimby»: preferenza di questo telefono
+  const bimbyOn = () => cookMode === "bimby";
+  const hasBimby = r => bimbyOn() && !!BIMBY[r.id];
   function allergenTags(al) {
     return al.map(k => ALLERGENS[k] ? `<span class="tag al">${ALLERGENS[k].e} ${ALLERGENS[k].n}</span>` : "").join("");
   }
+  const recipeArt = (r, opts) => (window.dishArt ? dishArt(r.id, opts) : "") || `<div class="emoji">${r.e}</div>`;
+  const BOOKMARK = on => `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4.3-6.5 4.3v-16a1 1 0 0 1 1-1z" fill="${on ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`;
+  const recipeMeta = r => `dai ${r.m} mesi · ${r.min} min${hasBimby(r) ? " · Bimby" : ""}`;
+  // Riga compatta (pagina Oggi)
   function recipeCard(r) {
+    return `<a class="card r-row" href="#/ricetta/${r.id}">
+      <figure class="r-thumb" data-photo="r:${r.id}">${recipeArt(r, { tile: true })}</figure>
+      <div class="grow"><h3>${esc(r.t)}</h3><div class="meta">${recipeMeta(r)}${favs["r:" + r.id] ? " · ❤️" : ""}</div>
+        ${r.al.length ? `<div>${allergenTags(r.al)}</div>` : ""}</div></a>`;
+  }
+  // Riquadro con foto e titolo sovrapposto; la griglia alterna riquadri alti e bassi su due colonne
+  function recipeTile(r, i) {
+    return `<a class="r-tile${i % 4 === 0 || i % 4 === 3 ? " tall" : ""}" href="#/ricetta/${r.id}">
+      <figure data-photo="r:${r.id}">${recipeArt(r, { tile: true, plate: r.cat === "pezzi" })}</figure>
+      ${hasBimby(r) ? `<span class="r-badge">Bimby</span>` : ""}${favs["r:" + r.id] ? `<span class="r-fav">${BOOKMARK(true)}</span>` : ""}
+      <span class="r-tile-txt"><b>${esc(r.t)}</b><small>dai ${r.m} mesi · ${r.min} min</small></span></a>`;
+  }
+  function tileGrid(list) {
+    const tiles = list.map(recipeTile);
+    return `<div class="r-grid"><div>${tiles.filter((_, i) => i % 2 === 0).join("")}</div><div>${tiles.filter((_, i) => i % 2 === 1).join("")}</div></div>`;
+  }
+  function recipeSlide(r) {
     const fav = favs["r:" + r.id];
-    return `<a class="card list-card" href="#/ricetta/${r.id}">
-      <div class="big-emoji">${r.e}</div>
-      <div class="grow"><h3>${esc(r.t)}</h3>
-        <div class="meta">dai ${r.m} mesi · ${r.min} min · ${RECIPE_CATS[r.cat]}${fav ? " · ❤️" : ""}</div>
-        ${r.al.length ? `<div>${allergenTags(r.al)}</div>` : ""}
-      </div></a>`;
+    return `<div class="r-slide">
+      <figure class="r-slide-img" data-photo="r:${r.id}">${recipeArt(r, { fill: true })}</figure>
+      <div class="r-slide-card"><h3>${esc(r.t)}</h3><div class="r-slide-meta">${recipeMeta(r)}</div></div>
+      <a class="r-slide-link" href="#/ricetta/${r.id}" aria-label="${esc(r.t)}"></a>
+      <span class="r-slide-badge" aria-hidden="true">${r.e}</span>
+      <button class="r-bm${fav ? " on" : ""}" data-act="fav" data-id="r:${r.id}" aria-label="${fav ? "Togli dai preferiti" : "Salva nei preferiti"}">${BOOKMARK(fav)}</button>
+    </div>`;
+  }
+  // Carosello: i pallini seguono lo scorrimento e la posizione resta dopo un aggiornamento della pagina
+  function wireCarousel(root) {
+    const car = root.querySelector("#rCarousel"), dots = root.querySelectorAll(".r-dots i");
+    if (!car) return;
+    car.scrollLeft = ui.carX || 0;
+    const upd = () => {
+      ui.carX = car.scrollLeft;
+      const i = Math.round(car.scrollLeft / Math.max(1, car.firstElementChild.offsetWidth + 12));
+      dots.forEach((d, k) => d.classList.toggle("on", k === i));
+    };
+    car.addEventListener("scroll", upd, { passive: true }); upd();
   }
 
   function viewRecipes() {
@@ -710,48 +752,199 @@
     }
     const chip = (key, val, label) => `<button class="chip ${ui[key] === val ? "on" : ""}" data-act="set" data-k="${key}" data-v="${val}">${label}</button>`;
     const toggle = (key, label) => `<button class="chip ${ui[key] ? "on" : ""}" data-act="toggle" data-k="${key}">${label}</button>`;
+    const home = ui.rAge === "ora" && ui.rCat === "tutte" && !ui.rSeason && !ui.rFav && !ui.rQ;
+    let body;
+    if (home) {
+      // In evidenza: le ricette adatte all'età e di stagione, a rotazione ogni giorno
+      const pool = list.filter(r => !r.seasons.length || r.seasons.includes(s));
+      const day = Math.floor(today0().getTime() / 864e5), n = Math.min(6, pool.length);
+      const picks = Array.from({ length: n }, (_, i) => pool[(day * 5 + i * 7) % pool.length]).filter((r, i, a) => a.indexOf(r) === i);
+      const section = (title, items, act) => items.length ? `<div class="section-title"><h2>${title}</h2>${act}</div>${tileGrid(items.slice(0, 6))}` : "";
+      const more = (k, v) => `<button class="link-btn" data-act="set" data-k="${k}" data-v="${v}">Tutte ›</button>`;
+      const byCat = (...cats) => list.filter(r => cats.includes(r.cat)).sort((a, b) => b.m - a.m);
+      body = `<div class="r-carousel" id="rCarousel">${picks.map(recipeSlide).join("")}</div>
+        <div class="r-dots" aria-hidden="true">${picks.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>
+        ${section("Di stagione", list.filter(r => r.seasons.includes(s)), `<button class="link-btn" data-act="toggle" data-k="rSeason">Tutte ›</button>`)}
+        ${section("Pappe", byCat("pappa", "base"), more("rCat", "pappa"))}
+        ${section("Da prendere con le mani", byCat("pezzi"), more("rCat", "pezzi"))}
+        ${section("Colazione e merenda", byCat("colazione", "merenda"), more("rCat", "merenda"))}
+        ${section("Con tutta la famiglia", byCat("famiglia"), more("rCat", "famiglia"))}`;
+    } else {
+      body = `<p class="small muted">${plural(list.length, "ricetta", "ricette")}</p>
+        ${list.length ? tileGrid(list) : `<div class="empty"><b>🥣</b>Nessuna ricetta con questi filtri.</div>`}`;
+    }
     return `
       <input class="search" type="search" placeholder="Cerca per nome o ingrediente (es. zucca)" value="${esc(ui.rQ)}" data-input="rQ" aria-label="Cerca ricette">
       <div class="chips">
         ${chip("rAge", "ora", m < 6 ? "Per iniziare" : "Adatte ora")}${chip("rAge", "6", "6 mesi")}${chip("rAge", "7-8", "7-8 mesi")}${chip("rAge", "9", "9+ mesi")}${chip("rAge", "tutte", "Tutte le età")}
       </div>
       <div class="chips">
+        <button class="chip ${bimbyOn() ? "on" : ""}" data-act="cook-mode" data-v="${bimbyOn() ? "classica" : "bimby"}">Ho il Bimby</button>
         ${toggle("rSeason", "🍂 Di stagione")}${toggle("rFav", "❤️ Preferite")}
         ${chip("rCat", "tutte", "Tutti i tipi")}${Object.keys(RECIPE_CATS).map(k => chip("rCat", k, RECIPE_CATS[k])).join("")}
       </div>
-      <div id="results">
-      <p class="small muted">${plural(list.length, "ricetta", "ricette")} · ogni ricetta ha la versione <b>pappa</b> 🥄 e quella <b>a pezzi</b> ✋</p>
-      ${list.map(recipeCard).join("") || `<div class="empty"><b>🥣</b>Nessuna ricetta con questi filtri.</div>`}
-      </div>
-      <p class="disclaimer">Le quantità sono indicative: segui l'appetito del bambino e le indicazioni del pediatra.</p>`;
+      <div id="results">${body}</div>
+      <p class="disclaimer">Ogni ricetta ha la versione <b>pappa</b> 🥄 e quella <b>a pezzi</b> ✋. Le quantità sono indicative: segui l'appetito del bambino e le indicazioni del pediatra.</p>`;
+  }
+
+  // Icona per ogni ingrediente (la prima parola chiave che corrisponde)
+  const ING_ICONS = [[/niente sale|senza sale/, "🚫"], [/arachid/, "🥜"], [/verdure/, "🥗"], [/brodo/, "🍲"], [/patata dolce|batata/, "🍠"], [/zucchin/, "🥒"], [/zucca/, "🎃"],
+    [/carot/, "🥕"], [/patat/, "🥔"], [/broccol/, "🥦"], [/spinaci|verza/, "🥬"], [/pomodor|passata/, "🍅"], [/pisell/, "🫛"], [/lenticch|fagiol|ceci/, "🫘"],
+    [/cipoll|porro/, "🧅"], [/sedano|prezzemolo|basilico|rosmarino/, "🌿"], [/avocado/, "🥑"], [/banana/, "🍌"], [/mela/, "🍎"], [/pera\b/, "🍐"], [/caco|cachi/, "🧡"],
+    [/limone/, "🍋"], [/salmone|merluzz|nasello|pesce/, "🐟"], [/tacchino|pollo|vitello|macinato|carne/, "🍗"], [/uov/, "🥚"], [/parmigian|ricotta|formaggio/, "🧀"],
+    [/yogurt/, "🥛"], [/latte/, "🍼"], [/olio/, "🫒"], [/mais|polenta/, "🌽"], [/riso|vialone/, "🍚"], [/pasta|pastina|fusilli|penne|ditalini|stelline/, "🍝"],
+    [/pangrattato|pane/, "🍞"], [/avena|farina|semolino|lievito/, "🌾"], [/tahina|sesamo|cannella/, "🌰"], [/acqua/, "💧"]];
+  function ingRow(txt) {
+    const t = normTxt(txt), ic = (ING_ICONS.find(([re]) => re.test(t)) || [0, "🥄"])[1];
+    const m = txt.match(/^(.*?)\s*\((.*)\)\s*$/);
+    return `<li><span class="rd-ic" aria-hidden="true">${ic}</span><span><b>${esc(m ? m[1] : txt)}</b>${m ? `<small>${esc(m[2])}</small>` : ""}</span></li>`;
+  }
+  const cookidooUrl = r => googleUrl("site:cookidoo.it " + r.t.replace(/[«»()]/g, "").replace(/\s*:.*$/, ""));
+  function recipeSteps(r) {
+    const useB = hasBimby(r);
+    return { useB, steps: useB ? BIMBY[r.id] : r.steps.map(t => [t, ""]) };
   }
 
   function viewRecipe(id) {
     const r = RECIPES.find(x => x.id === id);
     if (!r) return `<div class="empty"><b>🤔</b>Ricetta non trovata. <a href="#/ricette">Torna alle ricette</a></div>`;
     const fav = favs["r:" + r.id];
-    const m = ageM();
+    const m = ageM(), bb = !!BIMBY[r.id], { useB, steps } = recipeSteps(r), ver = ui.rVer || "pappa";
+    const chips = [`dai ${r.m} mesi`, RECIPE_CATS[r.cat]].concat(r.seasons.length ? ["🍂 " + r.seasons.join(" e ")] : [], useB ? ["TM31", "TM5", "TM6", "TM7"] : []);
+    const seg = (act, k, v, label, on) => `<button class="${on ? "on" : ""}" data-act="${act}"${k ? ` data-k="${k}"` : ""} data-v="${v}">${label}</button>`;
     return `
-      <div class="article-hero">
-        <figure class="dish" data-photo="r:${r.id}">${window.dishArt ? dishArt(r.id) : `<div class="emoji">${r.e}</div>`}</figure>
-        <p class="small muted dish-cap" data-photo-cap="r:${r.id}">Illustrazione indicativa: colore, consistenza e forma dei pezzi</p>
-        <h1>${esc(r.t)}</h1>
-        <div><span class="tag green">dai ${r.m} mesi</span><span class="tag">⏱ ${r.min} min</span><span class="tag">${RECIPE_CATS[r.cat]}</span>${r.seasons.length ? `<span class="tag peach">🍂 ${r.seasons.join(", ")}</span>` : ""}</div>
-        ${r.al.length ? `<div style="margin-top:6px">${allergenTags(r.al)}</div>` : ""}
-        <div class="btn-row" style="justify-content:center"><button class="btn ghost small" data-act="fav" data-id="r:${r.id}">${fav ? "❤️ Nei preferiti" : "🤍 Aggiungi ai preferiti"}</button>
-          <label class="btn ghost small" style="cursor:pointer">📷 La tua foto<input type="file" accept="image/*" data-act="photo" data-key="r:${r.id}" hidden></label>
-          <button class="btn ghost small" data-act="photo-del" data-key="r:${r.id}" hidden>🗑️ Togli foto</button></div>
+      <div class="rd-hero">
+        <figure data-photo="r:${r.id}">${recipeArt(r, { fill: true })}</figure>
+        <div class="rd-float">
+          <button class="rd-btn" data-act="back" aria-label="Indietro">‹</button>
+          <span class="grow"></span>
+          <button class="rd-btn" data-act="recipe-more" data-id="${r.id}" aria-label="Foto, copia e condividi">⋯</button>
+          <button class="rd-btn${fav ? " on" : ""}" data-act="fav" data-id="r:${r.id}" aria-label="${fav ? "Togli dai preferiti" : "Salva nei preferiti"}">${BOOKMARK(fav)}</button>
+        </div>
       </div>
+      <p class="small muted rd-cap" data-photo-cap="r:${r.id}">Illustrazione indicativa: colore, consistenza e forma dei pezzi</p>
+      <div class="rd-chips">${chips.map(c => `<span>${esc(c)}</span>`).join("")}</div>
+      <h1 class="rd-title">${esc(r.t)}</h1>
+      <div class="rd-meta"><span>⏱ ${r.min} min</span><span>🥄 pappa</span><span>✋ a pezzi</span></div>
+      ${r.al.length ? `<div class="rd-al">${allergenTags(r.al)}</div>` : ""}
+      <button class="btn block rd-cook" data-act="cook" data-id="${r.id}">👩‍🍳 Cucina passo passo</button>
       ${r.m > m && m >= 6 ? `<div class="note">Questa ricetta è pensata dai ${r.m} mesi: tienila per più avanti.</div>` : ""}
-      <div class="card"><h2>🛒 Ingredienti</h2><ul>${r.ing.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>
-      <div class="card"><h2>👩‍🍳 Preparazione</h2><ol class="steps">${r.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol></div>
-      <div class="card tint-peach"><div class="card-kicker">🥄 Versione pappa</div><p>${esc(r.pappa)}</p></div>
-      <div class="card tint-green"><div class="card-kicker">✋ Versione a pezzi</div><p>${esc(r.pezzi)}</p></div>
+      ${bb ? `<h2 class="rd-h">Come la prepari</h2><div class="segmented rd-seg">${seg("cook-mode", "", "classica", "🍳 Pentola e forno", !useB)}${seg("cook-mode", "", "bimby", "Bimby®", useB)}</div>` : ""}
+      <h2 class="rd-h">Ingredienti</h2>
+      <ul class="rd-ing">${r.ing.map(ingRow).join("")}</ul>
+      <h2 class="rd-h">Procedimento${useB ? " con il Bimby" : ""}</h2>
+      <ol class="rd-steps">${steps.map(([t, set], i) => `<li><span class="rd-n">${i + 1}</span><div>${esc(t)}${set ? `<div class="rd-set">${esc(set)}</div>` : ""}</div></li>`).join("")}</ol>
+      ${useB ? `<div class="card tint-green small"><div class="card-kicker">Con il Bimby</div><ul>${(window.BIMBY_NOTES || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      <h2 class="rd-h">Per il tuo bimbo</h2>
+      <div class="segmented rd-seg">${seg("set", "rVer", "pappa", "🥄 Pappa", ver === "pappa")}${seg("set", "rVer", "pezzi", "✋ A pezzi", ver === "pezzi")}</div>
+      <div class="card ${ver === "pappa" ? "tint-peach" : "tint-green"}"><p>${esc(ver === "pappa" ? r.pappa : r.pezzi)}</p></div>
       <div class="card tint-yellow"><div class="card-kicker">💡 Consiglio</div><p>${esc(r.tip)}</p></div>
       <div class="card"><div class="card-kicker">🧊 Conservazione</div><p>${esc(r.store)}</p></div>
       ${r.al.length ? `<div class="card small">Contiene allergeni: se è la prima volta, offrine poco, a pranzo, e osserva il bimbo. <a href="#/sezione/allergeni">Come introdurre gli allergeni ›</a></div>` : ""}
       ${videoBlock("r:" + r.id, r.videos, "ricetta svezzamento " + r.t.replace(/[«»()]/g, ""))}
-      <p class="disclaimer">Niente sale, zucchero o miele nel primo anno. Le quantità sono indicative.</p>`;
+      <div class="btn-row"><button class="btn ghost" data-act="recipe-copy" data-id="${r.id}">📋 Copia la ricetta</button>
+        ${bb ? `<a class="btn ghost" href="${cookidooUrl(r)}" target="_blank" rel="noopener">🔎 Simili su Cookidoo</a>` : ""}</div>
+      <p class="disclaimer">Niente sale, zucchero o miele nel primo anno. Le quantità sono indicative.${bb ? " Bimby® è un marchio di Vorwerk: Piccoli Passi non è collegata a Vorwerk." : ""}</p>`;
+  }
+  function recipeText(r) {
+    const { useB, steps } = recipeSteps(r);
+    return [r.t, "", "Ingredienti:"].concat(r.ing.map(i => "- " + i), ["", "Preparazione" + (useB ? " con il Bimby" : "") + ":"],
+      steps.map(([t, set], i) => (i + 1) + ". " + t + (set ? " [" + set + "]" : "")),
+      ["", "Versione pappa: " + r.pappa, "Versione a pezzi: " + r.pezzi, "", "Da Piccoli Passi"]).join("\n");
+  }
+  function openRecipeMenu(id) {
+    const r = RECIPES.find(x => x.id === id);
+    if (!r) return;
+    openSheet(`<h2>${esc(r.t)}</h2>
+      <div class="card" style="padding:0;overflow:hidden">
+        <label class="food" style="cursor:pointer"><span class="st">📷</span><span class="grow">Aggiungi la tua foto del piatto</span><input type="file" accept="image/*" data-act="photo" data-key="r:${r.id}" hidden></label>
+        <button class="food" data-act="photo-del" data-key="r:${r.id}" id="menuPhotoDel" hidden><span class="st">🗑️</span><span class="grow">Togli la tua foto</span></button>
+        <button class="food" data-act="recipe-copy" data-id="${r.id}"><span class="st">📋</span><span class="grow">Copia la ricetta</span></button>
+        ${navigator.share ? `<button class="food" data-act="recipe-share" data-id="${r.id}"><span class="st">📤</span><span class="grow">Condividi</span></button>` : ""}
+        ${BIMBY[r.id] ? `<a class="food" href="${cookidooUrl(r)}" target="_blank" rel="noopener"><span class="st">🔎</span><span class="grow">Cerca ricette simili su Cookidoo</span><span class="muted">›</span></a>` : ""}
+      </div>
+      <button class="btn ghost block" data-act="close">Chiudi</button>`);
+    PhotoDB.get("r:" + r.id).then(b => { const x = document.getElementById("menuPhotoDel"); if (b && x) x.hidden = false; }).catch(() => { /* niente foto */ });
+  }
+
+  /* Cucina passo passo: un passo alla volta, schermo sempre acceso, timer per le cotture */
+  let cook = null, wakeLock = null, cookTimer = null, audio = null;
+  async function keepAwake(on) {
+    try {
+      if (on && "wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
+      else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+    } catch (e) { /* non supportato o negato */ }
+  }
+  document.addEventListener("visibilitychange", () => { if (cook && document.visibilityState === "visible") keepAwake(true); });
+  function openCook(id) {
+    const r = RECIPES.find(x => x.id === id);
+    if (!r) return;
+    cook = Object.assign({ r, i: -1 }, recipeSteps(r));
+    let el = document.getElementById("cook");
+    if (!el) {
+      el = document.createElement("section"); el.id = "cook"; el.className = "cook";
+      el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); document.body.appendChild(el);
+    }
+    el.hidden = false; document.body.style.overflow = "hidden";
+    keepAwake(true); drawCook();
+  }
+  function closeCook() {
+    const el = document.getElementById("cook");
+    if (el) { el.hidden = true; el.innerHTML = ""; }
+    document.body.style.overflow = ""; cook = null; stopTimer(); keepAwake(false);
+  }
+  // Minuti di cottura scritti nel passo («cuoci per 15-20 minuti»): il timer parte dal valore più basso
+  function stepMinutes(t) {
+    const m = String(t).match(/(\d+)(?:\s*-\s*\d+)?\s*minut/);
+    return m && +m[1] >= 2 ? +m[1] : 0;
+  }
+  function drawCook() {
+    const el = document.getElementById("cook"), c = cook;
+    if (!el || !c) return;
+    const n = c.steps.length, atIng = c.i < 0, end = c.i >= n;
+    let main;
+    if (atIng) main = `<div class="cook-kicker">Prima di iniziare</div><h2>Prepara gli ingredienti</h2><ul class="rd-ing">${c.r.ing.map(ingRow).join("")}</ul>`;
+    else if (end) main = `<div class="cook-done">🎉</div><h2>Fatto!</h2><p><b>🥄 Pappa:</b> ${esc(c.r.pappa)}</p><p><b>✋ A pezzi:</b> ${esc(c.r.pezzi)}</p><p class="small muted">Controlla sempre la temperatura sul dorso della mano prima di servire.</p>`;
+    else {
+      const [t, set] = c.steps[c.i], mins = stepMinutes(t);
+      main = `<div class="cook-kicker">Passo ${c.i + 1} di ${n}</div><p class="cook-text">${esc(t)}</p>
+        ${set ? `<div class="cook-set">${esc(set)}</div>` : ""}
+        ${mins ? `<button class="btn ghost" data-act="cook-timer" data-m="${mins}">⏲️ Timer ${mins} minuti</button>` : ""}`;
+    }
+    const pct = atIng ? 0 : Math.min(100, Math.round(Math.min(c.i + 1, n) / n * 100));
+    el.innerHTML = `<header class="cook-top"><button class="rd-btn" data-act="cook-close" aria-label="Chiudi">✕</button>
+        <div class="grow"><b>${esc(c.r.t)}</b><div class="small muted">${c.useB ? "Con il Bimby" : "Pentola e forno"}</div></div>
+        <button class="cook-timer" id="cookTimer" data-act="cook-timer-stop" hidden></button></header>
+      <div class="progress"><i style="width:${pct}%"></i></div>
+      <div class="cook-main">${main}</div>
+      <footer class="cook-nav">${atIng ? "" : `<button class="btn ghost" data-act="cook-prev">‹ Indietro</button>`}
+        ${end ? `<button class="btn" data-act="cook-close">Chiudi</button>` : `<button class="btn" data-act="cook-next">${atIng ? "Iniziamo" : c.i === n - 1 ? "Fine" : "Avanti ›"}</button>`}</footer>`;
+    tickTimer();
+  }
+  function startTimer(mins) {
+    try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (e) { audio = null; }
+    stopTimer();
+    cookTimer = { end: Date.now() + mins * 60e3, iv: setInterval(tickTimer, 1000) };
+    tickTimer(); toast("Timer avviato: " + mins + " minuti");
+  }
+  function stopTimer() { if (cookTimer) clearInterval(cookTimer.iv); cookTimer = null; tickTimer(); }
+  function tickTimer() {
+    const b = document.getElementById("cookTimer");
+    if (!cookTimer) { if (b) b.hidden = true; return; }
+    const left = Math.max(0, Math.round((cookTimer.end - Date.now()) / 1000));
+    if (b) { b.hidden = false; b.textContent = "⏲️ " + Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0"); b.setAttribute("aria-label", "Timer: tocca per fermarlo"); }
+    if (!left) { clearInterval(cookTimer.iv); cookTimer = null; ring(); if (b) b.textContent = "⏰ Tempo!"; toast("⏰ Tempo scaduto: controlla la cottura"); }
+  }
+  function ring() {
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+    if (!audio) return;
+    try {
+      [0, 0.45, 0.9].forEach(d => {
+        const o = audio.createOscillator(), g = audio.createGain(), t0 = audio.currentTime + d;
+        o.frequency.value = 880; o.connect(g); g.connect(audio.destination);
+        g.gain.setValueAtTime(0.3, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35); o.start(t0); o.stop(t0 + 0.4);
+      });
+    } catch (e) { /* audio non disponibile */ }
   }
 
   /* ---------------- Guida ---------------- */
@@ -1488,6 +1681,7 @@
         if (!blob || !fig.isConnected) return;
         const url = URL.createObjectURL(blob); photoUrls.push(url);
         fig.innerHTML = `<img src="${url}" alt="La vostra foto del piatto">`;
+        fig.parentElement.classList.add("has-photo");
         const cap = app.querySelector(`[data-photo-cap="${key}"]`); if (cap) cap.textContent = "La vostra foto";
         const del = app.querySelector(`[data-act="photo-del"][data-key="${key}"]`); if (del) del.hidden = false;
       }).catch(() => { /* foto non disponibili */ });
@@ -2049,6 +2243,7 @@
         if (confirm("Scollegare questo telefono? I dati restano qui, ma non si aggiorneranno più con quelli della famiglia.")) { raw.del("sync"); toast("Telefono scollegato"); render(true); }
         break;
       case "photo-del":
+        closeSheet();
         if (confirm("Togliere la vostra foto e tornare all'illustrazione?")) PhotoDB.del(t.dataset.key).then(() => render(true)).catch(() => toast("Non riesco a togliere la foto"));
         break;
       case "vid-add": openAddVideo(t.dataset.key); break;
@@ -2102,6 +2297,30 @@
       }
       case "food-del": delete foods[t.dataset.id]; S.set("foods", foods); closeSheet(); render(true); break;
       case "close": closeSheet(); break;
+      case "back": goBack(); break;
+      case "cook-mode":
+        cookMode = t.dataset.v === "bimby" ? "bimby" : "classica"; raw.set("cookMode", cookMode);
+        if (/ricette/.test(location.hash)) toast(bimbyOn() ? "Versione Bimby attiva nelle ricette" : "Versione Bimby disattivata");
+        render(true); break;
+      case "recipe-more": openRecipeMenu(t.dataset.id); break;
+      case "recipe-copy": {
+        const r = RECIPES.find(x => x.id === t.dataset.id);
+        closeSheet();
+        if (r) toast(await copyText(recipeText(r)) ? "Ricetta copiata 📋" : "Non riesco a copiare la ricetta");
+        break;
+      }
+      case "recipe-share": {
+        const r = RECIPES.find(x => x.id === t.dataset.id);
+        closeSheet();
+        if (r && navigator.share) navigator.share({ title: r.t, text: recipeText(r) }).catch(() => { /* annullato */ });
+        break;
+      }
+      case "cook": openCook(t.dataset.id); break;
+      case "cook-close": closeCook(); break;
+      case "cook-next": if (cook) { cook.i = Math.min(cook.steps.length, cook.i + 1); drawCook(); } break;
+      case "cook-prev": if (cook) { cook.i = Math.max(-1, cook.i - 1); drawCook(); } break;
+      case "cook-timer": startTimer(+t.dataset.m); break;
+      case "cook-timer-stop": if (cookTimer && confirm("Fermare il timer?")) stopTimer(); break;
       case "install":
         if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; render(true); }
         break;
@@ -2151,6 +2370,7 @@
     if (e.target.dataset && e.target.dataset.act === "photo" && e.target.files[0]) {
       const key = e.target.dataset.key, file = e.target.files[0];
       e.target.value = "";
+      if (!sheet.hidden) closeSheet();
       toast("Salvo la foto…");
       resizeImage(file, 1000).then(b => PhotoDB.set(key, b)).then(() => { toast("Foto salvata 📷"); render(true); })
         .catch(() => toast("Non riesco a leggere questa foto"));

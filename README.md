@@ -3,7 +3,7 @@
 Web app installabile (PWA) per famiglie con bambini da 0 a 3 anni, utilizzabile in tutta Italia:
 
 - **Oggi**: età del bimbo, fase dello svezzamento, il mese di vita, consiglio, ricetta e gioco del giorno, prossimi appuntamenti ed eventi.
-- **Ricette**: 32 ricette con approccio misto (versione **pappa** 🥄 e **a pezzi** ✋), con illustrazione e la possibilità di aggiungere la propria foto.
+- **Ricette**: 32 ricette con approccio misto (versione **pappa** 🥄 e **a pezzi** ✋), in stile app di cucina: carosello, griglia fotografica, scheda a tutto schermo, ingredienti con icone e **cucina passo passo** (schermo sempre acceso e timer). Per chi ha il **Bimby®** c'è la versione con tempo, temperatura e velocità. Si può aggiungere la propria foto del piatto.
 - **Guida**: svezzamento passo passo, pezzi sicuri, conato o soffocamento, allergeni, diario dei cibi e percorso allergeni.
 - **Salute**: agenda, bilanci di salute, vaccinazioni, curve di crescita OMS, domande per il pediatra, guide «Come si fa», azienda sanitaria della propria zona.
 - **Giochi**: attività per età, tappe dello sviluppo, mese per mese, consigli, libri e filastrocche.
@@ -62,6 +62,7 @@ Installazione sul telefono:
 | `js/config.js` | indirizzo del servizio centrale |
 | `js/app.js` | l'app |
 | `js/data-recipes.js`, `js/dish-art.js` | ricette e loro illustrazioni |
+| `js/data-bimby.js` | versione Bimby® delle ricette (TM31, TM5, TM6, TM7); Bimby® è un marchio di Vorwerk, l'app non è collegata a Vorwerk |
 | `js/data-guide.js` | guida, cibi del diario, consigli, tappe |
 | `js/data-activities.js` | giochi e attività |
 | `js/data-health.js` | allergeni, bilanci, vaccinazioni, emergenze, guide di cura, libri, filastrocche |

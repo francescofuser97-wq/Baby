@@ -45,6 +45,11 @@
   };
 
   /* --- utilità --- */
+  // Mescola un colore con il bianco (k = quanto bianco): fondo pastello diverso per ogni piatto
+  function tint(hex, k) {
+    const n = parseInt(hex.slice(1), 16);
+    return "#" + [16, 8, 0].map(sh => Math.round(((n >> sh) & 255) * (1 - k) + 255 * k).toString(16).padStart(2, "0")).join("");
+  }
   function shade(hex, f) {
     const n = parseInt(hex.slice(1), 16);
     const ch = s => Math.max(0, Math.min(255, Math.round(((n >> s) & 255) * f)));
@@ -172,18 +177,34 @@
     </g>`;
   }
 
-  window.dishArt = function (id) {
+  let seq = 0;   // ogni disegno ha id interni unici: la stessa ricetta può comparire più volte nella pagina
+  /* opts.fill: riempie il contenitore (ritaglia invece di lasciare bordi), senza etichette, su fondo pastello.
+     opts.tile: solo la ciotola (o, con opts.plate, il piatto) in alto, per le miniature. */
+  window.dishArt = function (id, opts) {
     const look = LOOKS[id];
     if (!look) return "";
-    const r = rng(id);
+    opts = opts || {};
+    const r = rng(id), uid = id + "-" + (++seq);
     const hasBowl = !!look.bowl, hasPlate = !!look.plate;
+    const base = look.bowl || (look.plate && look.plate[0][1]) || "#F1E0CB";
+    const top = opts.tile || opts.fill ? tint(base, 0.84) : "#FBF1E4", bot = opts.tile || opts.fill ? tint(base, 0.72) : "#F1E0CB";
+    const bg = `<defs><linearGradient id="bg-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bot}"/></linearGradient></defs>`;
+    if (opts.tile) {
+      const usePlate = hasPlate && (opts.plate || !hasBowl);
+      const body = usePlate ? plate(look, 100, 62, r, false) : bowl(uid, look, 100, 50, r);
+      return `<svg viewBox="0 0 200 200" preserveAspectRatio="xMidYMin slice" class="dish-art" role="img" aria-label="Illustrazione del piatto">
+        ${bg}<rect x="-100" y="-100" width="400" height="400" fill="url(#bg-${uid})"/>${body}</svg>`;
+    }
     let body;
-    if (hasBowl && hasPlate) body = bowl(id, look, 100, 92, r) + plate(look, 238, 118, r, false);
-    else if (hasBowl) body = bowl(id, look, 160, 92, r);
+    if (hasBowl && hasPlate) body = bowl(uid, look, 100, 92, r) + plate(look, 238, 118, r, false);
+    else if (hasBowl) body = bowl(uid, look, 160, 92, r);
     else body = plate(look, 160, 108, r, true);
+    if (opts.fill) return `<svg viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice" class="dish-art" role="img" aria-label="Illustrazione: come dovrebbe venire">
+      ${bg}<rect x="-200" y="-200" width="720" height="580" fill="url(#bg-${uid})"/>
+      <rect x="-200" y="140" width="720" height="240" fill="${tint(base, 0.6)}" opacity=".55"/>${body}</svg>`;
     return `<svg viewBox="0 0 320 180" class="dish-art" role="img" aria-label="Illustrazione: come dovrebbe venire">
-      <defs><linearGradient id="bg-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FBF1E4"/><stop offset="1" stop-color="#F1E0CB"/></linearGradient></defs>
-      <rect width="320" height="180" rx="18" fill="url(#bg-${id})"/>
+      ${bg}
+      <rect width="320" height="180" rx="18" fill="url(#bg-${uid})"/>
       <path d="M0 140h320v22a18 18 0 0 1-18 18H18A18 18 0 0 1 0 162z" fill="#EAD6BF" opacity=".6"/>
       ${body}
       ${hasBowl && hasPlate ? `<text x="100" y="172" text-anchor="middle" class="dish-lbl">pappa</text><text x="238" y="172" text-anchor="middle" class="dish-lbl">a pezzi</text>` : ""}
