@@ -7,7 +7,7 @@ Web app installabile (PWA) per famiglie con bambini da 0 a 3 anni, utilizzabile 
 - **Guida**: svezzamento passo passo, pezzi sicuri, conato o soffocamento, allergeni, diario dei cibi e percorso allergeni.
 - **Salute**: agenda, bilanci di salute, vaccinazioni, curve di crescita OMS, domande per il pediatra, guide «Come si fa», azienda sanitaria della propria zona.
 - **Giochi**: attività per età, tappe dello sviluppo, mese per mese, consigli, libri e filastrocche.
-- **Eventi**: notizie automatiche sugli eventi per bambini del proprio comune, elenchi curati per alcune zone, luoghi e servizi vicini.
+- **Eventi**: eventi per bambini del proprio comune trovati in automatico nelle notizie locali (con la data messa in calendario), elenchi curati per alcune zone, luoghi e servizi vicini.
 - **Emergenze** (🆘): numeri utili, pronto soccorso più vicino, disostruzione, febbre, ingestioni, ustioni.
 - **Più figli** con profili separati, **condivisione cifrata** con chi si vuole (partner, nonni), tema chiaro/scuro.
 
@@ -21,13 +21,13 @@ Ogni famiglia sceglie il proprio comune (Impostazioni o «Imposta il tuo comune�
 | Sito ufficiale del Comune, codice ISTAT | Wikidata |
 | Azienda sanitaria (ASL, ULSS, ATS, ASP…) | tabella `js/data-asl.js` (provincia, e comune per comune dove una provincia ne ha più di una) |
 | Sito dell'azienda sanitaria | ULSS del Veneto: indirizzo noto; altre: Wikidata, altrimenti una ricerca |
-| Notizie su eventi per bambini | Google News, letto dal servizio (vedi sotto), con il solo nome del comune |
+| Eventi dalle notizie | Google News, cercato con il solo nome del comune: tramite il servizio (vedi sotto) oppure, se non c'è, tramite i lettori pubblici rss2json.com e allorigins.win. L'app tiene solo le notizie che nominano il comune e parlano di eventi, scarta la cronaca e ricava la data dal titolo («sabato 25 ottobre», «dal 7 al 9 novembre», «domenica») per metterle in calendario |
 | Ricerche e mappe (consultorio, pronto soccorso, biblioteca, asilo nido, bonus, farmacia di turno…) | costruite con il nome del comune e il sito del Comune |
 | Eventi, luoghi e ospedali curati | **pacchetti di zona** in `js/areas/`, mostrati solo a chi abita entro il raggio della zona |
 
 ### Pacchetti di zona
 
-`js/areas/ovest-vicentino.js` contiene eventi, luoghi, ospedali e fonti curati per Montecchio Maggiore e dintorni (aggiornati ogni settimana in automatico). Per un'altra zona si crea un file simile (`center`, `radiusKm`, `updated`, `events`, `places`, `hospitals`, `sources`, `towns`) e lo si aggiunge a `index.html` e `sw.js`.
+`js/areas/ovest-vicentino.js` contiene eventi, luoghi, ospedali e fonti curati per Montecchio Maggiore e dintorni. Per un'altra zona si crea un file simile (`id`, `name`, `center`, `radiusKm`, `updated`, `events`, `places`, `hospitals`, `sources`, `towns`) e lo si aggiunge a `index.html` e `sw.js`. L'aggiornamento automatico del mercoledì lavora su tutti i file di `js/areas/`.
 
 ## Il servizio (condivisione e notizie)
 
@@ -42,7 +42,7 @@ Pubblicazione: su [script.google.com](https://script.google.com) nuovo progetto 
 
 - Ogni famiglia ha uno spazio identificato da un codice segreto (inviti `PP2-…`). Il telefono ricava dal codice tre chiavi: l'identificativo dello spazio, una chiave **AES-GCM** per cifrare i dati e una chiave **HMAC** per rendere irriconoscibili i nomi dei dati.
 - Al servizio arrivano solo identificativo e dati cifrati: chi lo gestisce (e Google) non può leggere nomi, date, diario o misure, né sapere di quale comune si tratta.
-- Per le notizie il servizio riceve solo il nome del comune.
+- Per le notizie si invia solo il nome del comune (al servizio, oppure ai lettori pubblici rss2json.com e allorigins.win se il servizio non c'è).
 - Le foto dei piatti non lasciano mai il telefono.
 - Gli spazi creati con la versione precedente (codici `PP1-…`, dati in chiaro) continuano a funzionare e si possono convertire con **Passa alla cifratura**.
 - Il codice di invito dà accesso ai dati della famiglia: va mandato solo a persone di fiducia.

@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.0.0";
+  const VERSION = "4.1.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -394,52 +394,153 @@
   }
 
   // Notizie automatiche sugli eventi della zona (tramite il servizio Google della famiglia)
+  /* ---------------- Eventi automatici per qualsiasi comune ---------------- */
+  // Fonte: Google News. Lo legge il servizio (centrale o di famiglia) se c'è; altrimenti due servizi pubblici
+  // gratuiti che rendono il feed leggibile dal browser. In ogni caso parte solo il nome del comune.
   const newsServiceUrl = () => (window.PP_CONFIG && PP_CONFIG.serviceUrl) || (raw.get("sync", null) || {}).url || "";
+  const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+  const GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
+  const EVENT_WORDS = /spettacol|teatr|laborator|lettur|letture|fiab|burattin|festa|feste|sagra|mercatin|concert|event|animazion|giochi|gioco|famigli|bambin|piccol|carneval|natale|befana|halloween|museo|mostra|bibliotec|circo|parco|weekend|domenica|sabato|cinema|musical|caccia al tesoro|presepe|luminarie/i;
+  const NOT_EVENT = /incident|mort[oaie]\b|muore|decess|arrest|rapin|omicid|violenz|indagin|ferit|tragedi|polizia|carabinier|incendi|maltempo|allerta|furto|truff|processo|sentenz|denunc|sequestr|annegat|aggress|schianto|scontro|lutto|funerale|ricoverat/i;
+  const normTxt = str => String(str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[’‘`´]/g, "'");
   function feedQueries() {
-    const h = homeOf(), m = today0().getMonth();
-    const q = ["eventi bambini " + h.name + " when:30d", h.name + " spettacolo per bambini when:30d", h.name + " biblioteca letture bambini when:60d", h.name + " famiglie bambini weekend when:14d"];
-    if (m >= 10) q.push("Natale bambini " + h.name + " when:30d");
-    else if (m <= 1) q.push("Carnevale bambini " + h.name + " when:30d");
+    const h = homeOf(), m = today0().getMonth(), c = '"' + h.name + '"';
+    const q = [c + " bambini (spettacolo OR laboratorio OR letture OR festa OR evento) when:21d",
+      c + " famiglie (weekend OR domenica OR sabato) eventi when:14d",
+      c + " biblioteca bambini when:45d"];
+    if (m >= 10) q.push(c + " Natale bambini mercatini when:30d");
+    else if (m <= 1) q.push(c + " Carnevale bambini when:30d");
     return q;
   }
+  const parseNewsDate = d => { if (!d) return 0; const x = Date.parse(d); if (!isNaN(x)) return x; const y = Date.parse(String(d).replace(" ", "T") + "Z"); return isNaN(y) ? 0 : y; };
+  function parseRss(xml) {
+    const doc = new DOMParser().parseFromString(xml, "text/xml");
+    return Array.from(doc.querySelectorAll("item")).map(it => ({
+      t: (it.querySelector("title") || {}).textContent, l: (it.querySelector("link") || {}).textContent,
+      d: (it.querySelector("pubDate") || {}).textContent, s: (it.querySelector("source") || {}).textContent || "",
+      x: (it.querySelector("description") || {}).textContent || ""
+    }));
+  }
+  async function fetchTimeout(url, opts, ms) {
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), ms || 9000);
+    try { return await fetch(url, Object.assign({}, opts, { signal: ctl.signal })); } finally { clearTimeout(tm); }
+  }
+  async function fetchNews(queries) {
+    const svc = newsServiceUrl();
+    if (svc) {
+      try {
+        const res = await fetchTimeout(svc, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "news", q: queries }) }, 20000);
+        const data = await res.json();
+        if (data && Array.isArray(data.items)) return { items: data.items, via: "servizio" };
+      } catch (e) { /* si passa ai servizi pubblici */ }
+    }
+    const all = [];
+    let via = "";
+    for (const q of queries.slice(0, 4)) {
+      const rss = "https://news.google.com/rss/search?q=" + encodeURIComponent(q) + "&hl=it&gl=IT&ceid=IT:it";
+      let items = null;
+      try {
+        const j = await (await fetchTimeout("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(rss))).json();
+        if (j && j.status === "ok" && Array.isArray(j.items)) { items = j.items.map(i => ({ t: i.title, l: i.link, d: i.pubDate, s: i.author || "", x: i.description || "" })); via = via || "rss2json"; }
+      } catch (e) { /* provo il secondo */ }
+      if (!items) {
+        try { items = parseRss(await (await fetchTimeout("https://api.allorigins.win/raw?url=" + encodeURIComponent(rss))).text()); via = via || "allorigins"; } catch (e) { /* niente */ }
+      }
+      if (items) all.push(...items);
+    }
+    if (!via) throw new Error("nessuna fonte raggiungibile");
+    return { items: all, via };
+  }
+  // Data dell'evento ricavata dal testo: «sabato 25 ottobre», «dal 7 al 9 novembre», «25/10», «sabato e domenica».
+  // Con strict i giorni della settimana da soli non bastano (servono per il titolo, non per il riassunto).
+  function eventDateFrom(text, pubMs, strict) {
+    const t = normTxt(text), pub = new Date(pubMs || Date.now());
+    const base = new Date(pub.getFullYear(), pub.getMonth(), pub.getDate());
+    const mesiN = MESI.map(normTxt), mesi = mesiN.join("|");
+    const mk = (d, mo) => {
+      let dt = new Date(pub.getFullYear(), mo, d);
+      if (dt < addDays(base, -45)) dt = new Date(pub.getFullYear() + 1, mo, d);
+      return dt;
+    };
+    const ok = d => d >= 1 && d <= 31;
+    let m = t.match(new RegExp("\\b(\\d{1,2})°?\\s+(" + mesi + ")\\s*(?:al|-|–|fino al)\\s*(\\d{1,2})°?\\s+(" + mesi + ")\\b"));
+    if (m && ok(+m[1]) && ok(+m[3])) {
+      const st = mk(+m[1], mesiN.indexOf(m[2])); let en = new Date(st.getFullYear(), mesiN.indexOf(m[4]), +m[3]);
+      if (en < st) en = new Date(st.getFullYear() + 1, en.getMonth(), en.getDate());
+      return { start: iso(st), end: iso(en) };
+    }
+    m = t.match(new RegExp("\\b(\\d{1,2})°?(?:\\s*(?:e|al|-|–)\\s*(\\d{1,2}))?\\s+(" + mesi + ")\\b"));
+    if (m && ok(+m[1])) {
+      const mo = mesiN.indexOf(m[3]), a = +m[1], b = m[2] ? +m[2] : null, st = mk(a, mo);
+      return { start: iso(st), end: b && b > a && b <= 31 ? iso(new Date(st.getFullYear(), mo, b)) : "" };
+    }
+    m = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?\b(?!\s*(?:anni|mesi|a\b))/);
+    if (m && +m[2] >= 1 && +m[2] <= 12 && ok(+m[1])) return { start: iso(mk(+m[1], +m[2] - 1)), end: "" };
+    if (strict) return null;
+    const days = GIORNI.map(normTxt).map((g, wd) => new RegExp("\\b" + g + "\\b").test(t) ? addDays(base, (wd - base.getDay() + 7) % 7) : null).filter(Boolean)
+      .concat(/\bweekend|fine settimana\b/.test(t) ? [6, 0].map(wd => addDays(base, (wd - base.getDay() + 7) % 7)) : []).sort((x, y) => x - y);
+    if (!days.length) return null;
+    const last = days[days.length - 1];
+    return { start: iso(days[0]), end: daysBetween(days[0], last) > 0 && daysBetween(days[0], last) <= 3 ? iso(last) : "" };
+  }
   let feedLoading = false;
+  const FEED_V = 2;
   async function loadFeed(force) {
-    const url = newsServiceUrl(), h = homeOf();
-    if (!url || !h || feedLoading) return;
+    const h = homeOf();
+    if (!h || feedLoading) return;
     const cached = raw.get("feed", null);
-    if (!force && cached && cached.place === h.name && Date.now() - cached.at < 6 * 3600e3) return;
+    if (!force && cached && cached.v === FEED_V && cached.place === h.name && Date.now() - cached.at < (cached.ok ? 6 : 1) * 3600e3) return;
     feedLoading = true;
     try {
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "news", q: feedQueries() }) });
-      const data = await res.json();
-      if (!data || !Array.isArray(data.items)) throw new Error((data && data.error) || "risposta non valida");
-      const seen = {}, limit = Date.now() - 60 * 864e5;
-      const items = data.items.map(it => {
-        const t = String(it.t || "").replace(/\s+-\s+[^-]+$/, "").trim();
-        return { t, l: it.l, s: it.s || "", d: Date.parse(it.d) || 0 };
-      }).filter(it => it.t && /^https:\/\//.test(it.l || "") && it.d > limit && !seen[it.t.toLowerCase()] && (seen[it.t.toLowerCase()] = true))
-        .sort((a, b) => b.d - a.d).slice(0, 15);
-      raw.set("feed", { place: h.name, at: Date.now(), items, ok: true });
+      const { items: rawItems, via } = await fetchNews(feedQueries());
+      const seen = {}, limit = Date.now() - 45 * 864e5, place = normTxt(h.name);
+      const items = rawItems.map(it => {
+        // Google News mette la testata in fondo al titolo («… - Il Giornale di Vicenza»)
+        const full = String(it.t || "").trim(), sm = full.match(/^(.*\S)\s+-\s+([^-]+)$/);
+        const t = sm ? sm[1] : full, src = String(it.s || (sm ? sm[2] : "")).trim();
+        let x = String(it.x || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+        // il riassunto di Google News spesso ripete solo titolo e testata: in quel caso non serve
+        const rest = normTxt(x).replace(normTxt(t), "").replace(normTxt(src), "").replace(/[^a-z0-9]+/g, "");
+        if (rest.length < 25) x = "";
+        return { t, l: it.l, s: src, d: parseNewsDate(it.d), x };
+      }).filter(it => {
+        const all = normTxt(it.t + " " + it.x), key = normTxt(it.t);
+        return it.t && /^https:\/\//.test(it.l || "") && it.d > limit && all.includes(place) && EVENT_WORDS.test(it.t) && !NOT_EVENT.test(it.t)
+          && !seen[key] && (seen[key] = true);
+      }).map(it => Object.assign(it, { ev: eventDateFrom(it.t, it.d) || (it.x ? eventDateFrom(it.x, it.d, true) : null) }))
+        .sort((a, b) => b.d - a.d).slice(0, 20);
+      raw.set("feed", { v: FEED_V, place: h.name, at: Date.now(), items, ok: true, via });
     } catch (err) {
-      raw.set("feed", { place: h.name, at: Date.now(), items: (cached && cached.place === h.name ? cached.items : []), ok: false, err: String(err && err.message || err) });
+      raw.set("feed", { v: FEED_V, place: h.name, at: Date.now(), items: (cached && cached.v === FEED_V && cached.place === h.name ? cached.items : []), ok: false, err: String(err && err.message || err) });
     } finally {
       feedLoading = false;
-      if (/eventi/.test(location.hash) && sheet.hidden) render(true);
+      if (/eventi|oggi/.test(location.hash) && sheet.hidden) render(true);
     }
+  }
+  // Eventi con data ricavati dalle notizie (entrano nel calendario insieme agli altri)
+  function newsEvents() {
+    const f = raw.get("feed", null), h = homeOf();
+    if (!f || !h || f.v !== FEED_V || f.place !== h.name) return [];
+    return (f.items || []).filter(it => it.ev && it.ev.start).map(it => ({
+      id: "n-" + hashStr(it.l), t: it.t, e: "🗞️", start: it.ev.start, end: it.ev.end || "", time: "", place: "", town: h.name, lat: h.lat, lon: h.lon,
+      desc: it.x ? it.x.slice(0, 220) + (it.x.length > 220 ? "…" : "") : "", link: it.l, status: "dalla stampa locale" + (it.s ? " · " + it.s : ""), news: true
+    }));
   }
   function feedCard() {
     const h = homeOf();
     if (!h) return "";
-    if (!newsServiceUrl()) return `<div class="card tint-blue small"><b>📰 Eventi della tua zona in automatico.</b> Attivando la condivisione con la famiglia (Impostazioni), l'app riceve ogni giorno le notizie su eventi e spettacoli per bambini nella zona di ${esc(h.name)}.</div>`;
     const f = raw.get("feed", null);
-    if (!f || f.place !== h.name) { loadFeed(false); return `<div class="card small muted">📰 Cerco gli eventi nella zona di ${esc(h.name)}…</div>`; }
+    if (!f || f.v !== FEED_V || f.place !== h.name) { loadFeed(false); return `<div class="card small muted">📰 Cerco eventi e notizie per bambini a ${esc(h.name)}…</div>`; }
     loadFeed(false);
-    const head = `<div class="card-kicker">📰 Dalla zona di ${esc(h.name)}, in automatico</div>`;
-    if (!f.items.length) return `<div class="card">${head}<p class="small muted" style="margin:0">${f.ok ? "Nessuna notizia recente su eventi per bambini." : (/codice|action|non valida/.test(f.err || "") ? "Per ricevere le notizie aggiorna il servizio Google (Impostazioni → Condivisione → Aggiorna il servizio)." : "Non riesco a leggere le notizie in questo momento.")}</p>
+    const undated = (f.items || []).filter(it => !it.ev || !it.ev.start);
+    const dated = (f.items || []).length - undated.length;
+    const head = `<div class="card-kicker">📰 Altre notizie su eventi a ${esc(h.name)}</div>`;
+    if (!f.items.length) return `<div class="card"><div class="card-kicker">📰 Eventi trovati in automatico</div><p class="small muted" style="margin:0">${f.ok ? "Nelle ultime settimane non ho trovato notizie su eventi per bambini a " + esc(h.name) + ". Prova le ricerche qui sotto." : "Non riesco a leggere le notizie in questo momento: controlla la connessione."}</p>
       <button class="btn ghost small" data-act="feed-reload" style="margin-top:8px">🔄 Riprova</button></div>`;
+    if (!undated.length) return `<p class="small muted">📰 ${plural(dated, "evento trovato", "eventi trovati")} in automatico nelle notizie di ${esc(h.name)}: sono in calendario qui sopra.</p>`;
     return `<div class="card">${head}
-      ${f.items.map(it => `<a class="food" href="${esc(it.l)}" target="_blank" rel="noopener"><span class="st">🗞️</span><span class="grow">${esc(it.t)}<br><span class="small muted">${esc(it.s)}${it.d ? " · " + fmt(new Date(it.d), { day: "numeric", month: "short" }) : ""}</span></span><span class="muted">›</span></a>`).join("")}
-      <p class="small muted" style="margin:8px 0 0">Notizie trovate in automatico da Google News: controlla date e dettagli aprendo l'articolo. Se trovi un evento adatto, aggiungilo con «➕».</p></div>`;
+      ${undated.map(it => `<a class="food" href="${esc(it.l)}" target="_blank" rel="noopener"><span class="st">🗞️</span><span class="grow">${esc(it.t)}<br><span class="small muted">${esc(it.s)}${it.d ? " · " + fmt(new Date(it.d), { day: "numeric", month: "short" }) : ""}</span></span><span class="muted">›</span></a>`).join("")}
+      <p class="small muted" style="margin:8px 0 0">Trovate in automatico da Google News. Senza una data nel titolo: apri l'articolo per i dettagli e, se ti interessa, aggiungilo con «➕».</p></div>`;
   }
   const isOngoing = e => e.start && e.end && parseISO(e.start) <= today0();
 
@@ -447,7 +548,7 @@
     const t = today0();
     const official = packList("events").filter(e => e.start).map(e => Object.assign({ mine: false }, e));
     const mine = myEvents.map(e => Object.assign({ mine: true, e: "⭐" }, e));
-    return official.concat(mine)
+    return official.concat(mine, newsEvents())
       .filter(e => e.start && parseISO(e.end || e.start) >= t && withinKm(e))
       .sort((a, b) => a.start.localeCompare(b.start));
   }
@@ -486,6 +587,7 @@
     const seasonal = recPool.filter(r => !r.seasons.length || r.seasons.includes(season()));
     const rec = pick(seasonal.length ? seasonal : recPool, 3);
     const act = pick(activitiesForAge(m), 7);
+    if (homeOf()) loadFeed(false);
     // In "Oggi" mostra prima le novità: salta le rassegne lunghe già iniziate
     const evs = upcomingEvents().filter(e => !(isOngoing(e) && daysBetween(parseISO(e.start), parseISO(e.end)) > 3)).slice(0, 3);
     const tried = Object.keys(foods).length;
@@ -821,8 +923,8 @@
         ${ev.age ? `<span class="tag green">👶 ${esc(ev.age)}</span>` : ""}${ev.mine ? `<span class="tag purple">Aggiunto da te</span>` : ""}${ev.status ? `<span class="tag ${ev.status === "confermato" ? "green" : "yellow"}">${esc(ev.status)}</span>` : ""}
         ${ev.desc ? `<p class="small" style="margin:8px 0 0">${esc(ev.desc)}</p>` : ""}
         <div class="btn-row">
-          ${ev.link ? `<a class="btn ghost small" href="${esc(ev.link)}" target="_blank" rel="noopener">🔗 Sito</a>` : ""}
-          ${ev.q || place ? `<a class="btn ghost small" href="${mapsUrl(ev.q || place)}" target="_blank" rel="noopener">🗺️ Mappa</a>` : ""}
+          ${ev.link ? `<a class="btn ghost small" href="${esc(ev.link)}" target="_blank" rel="noopener">${ev.news ? "🗞️ Articolo" : "🔗 Sito"}</a>` : ""}
+          ${(ev.q || place) && !ev.news ? `<a class="btn ghost small" href="${mapsUrl(ev.q || place)}" target="_blank" rel="noopener">🗺️ Mappa</a>` : ""}
           ${d ? `<button class="btn ghost small" data-act="ics" data-id="${esc(ev.id)}">📅 Calendario</button>` : ""}
           ${ev.mine ? `<button class="btn danger small" data-act="ev-del" data-id="${esc(ev.id)}">Elimina</button>` : ""}
         </div>
@@ -889,10 +991,10 @@
       const staleDays = updated ? daysBetween(parseISO(updated), today0()) : 0;
       body = `${homeLine}
         ${local ? kmChips : ""}
-        ${feedCard()}
         ${local ? `<div class="note small">📌 Elenco curato della zona «${esc(nearPacks()[0].name)}», aggiornato al ${fmt(parseISO(updated), { day: "numeric", month: "long", year: "numeric" })}${staleDays > 30 ? ` (<b>più di un mese fa</b>)` : ""}. Prima di andare <b>controlla sempre date e orari sul sito dell'organizzatore</b>.</div>` : ""}
-        ${up.length ? `<div class="section-title"><h2>In calendario</h2></div>${up.map(eventCard).join("")}` : (local ? `<div class="empty"><b>📅</b>Nessun evento in arrivo con data certa.</div>` : "")}
+        ${up.length ? `<div class="section-title"><h2>In calendario</h2></div>${up.some(e => e.news) ? `<p class="small muted" style="margin:-4px 0 10px">🗞️ = trovato in automatico nelle notizie locali: la data è letta dal titolo, controlla i dettagli nell'articolo.</p>` : ""}${up.map(eventCard).join("")}` : (local ? `<div class="empty"><b>📅</b>Nessun evento in arrivo con data certa.</div>` : "")}
         ${tbd.length ? `<div class="section-title"><h2>In arrivo, date da confermare</h2></div>${tbd.map(eventCard).join("")}` : ""}
+        ${feedCard()}
         <button class="btn ghost block" data-act="ev-add" style="margin:8px 0 14px">➕ Aggiungi un evento che hai trovato</button>
         ${searchCard}`;
     } else if (ui.evTab === "luoghi") {
@@ -1850,7 +1952,7 @@
           <li><b>Sul telefono:</b> profili, diario, crescita, agenda, preferiti e foto restano in questa app.</li>
           <li><b>Condivisione (se attiva):</b> i dati partono già <b>cifrati</b> con il codice di famiglia; il servizio li conserva senza poterli leggere. Le foto non vengono mai inviate.</li>
           <li><b>Comune:</b> il nome viene cercato su OpenStreetMap e il sito del Comune o dell'ASL su Wikidata. Non viene inviato nient'altro.</li>
-          <li><b>Notizie sugli eventi:</b> al servizio arriva solo il nome del comune.</li>
+          <li><b>Notizie sugli eventi:</b> per cercarle su Google News si invia solo il nome del comune, al servizio dell'app oppure, se non c'è, ai lettori pubblici di notizie rss2json.com e allorigins.win.</li>
           <li><b>Video:</b> YouTube riceve la richiesta solo quando premi play.</li>
         </ul>
       </div>

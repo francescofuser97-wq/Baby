@@ -85,7 +85,8 @@ function news_(queries) {
         var channel = XmlService.parse(res.getContentText()).getRootElement().getChild('channel');
         channel.getChildren('item').slice(0, 10).forEach(function (it) {
           var src = it.getChild('source');
-          found.push({ t: it.getChildText('title'), l: it.getChildText('link'), d: it.getChildText('pubDate'), s: src ? src.getText() : '' });
+          var desc = String(it.getChildText('description') || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 400);
+          found.push({ t: it.getChildText('title'), l: it.getChildText('link'), d: it.getChildText('pubDate'), s: src ? src.getText() : '', x: desc });
         });
       }
     } catch (err) { /* ricerca saltata */ }
