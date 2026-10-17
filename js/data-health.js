@@ -127,8 +127,8 @@ window.EMERGENCY_GUIDE = [
 ];
 
 window.HOSPITALS = [
-  { t: "Ospedale di Arzignano – Pronto soccorso", q: "Ospedale di Arzignano pronto soccorso", km: 8 },
-  { t: "Ospedale San Bortolo, Vicenza – Pronto soccorso pediatrico", q: "Ospedale San Bortolo Vicenza pronto soccorso pediatrico", km: 13 }
+  { t: "Ospedale di Arzignano – Pronto soccorso", q: "Ospedale di Arzignano pronto soccorso", km: 8, town: "Arzignano" },
+  { t: "Ospedale San Bortolo, Vicenza – Pronto soccorso pediatrico", q: "Ospedale San Bortolo Vicenza pronto soccorso pediatrico", km: 13, town: "Vicenza" }
 ];
 
 /* Libri consigliati per età (molti sono classici di Nati per Leggere) */

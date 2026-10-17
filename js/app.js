@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "3.0.0";
+  const VERSION = "3.1.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -17,7 +17,7 @@
   };
   // Dati di ogni figlio (salvati come "k.<id>.<chiave>") e dati in comune per la famiglia
   const KID_KEYS = ["foods", "ready", "done", "growth", "health", "appts", "questions"];
-  const SHARED_KEYS = ["favs", "myEvents", "contacts", "evKm", "theme", "videos"];
+  const SHARED_KEYS = ["favs", "myEvents", "contacts", "evKm", "theme", "videos", "home"];
   let kids = raw.get("kids", null);
   let activeKid = raw.get("activeKid", null);
   if (!kids) {
@@ -66,6 +66,7 @@
   let theme = S.get("theme", "auto");
   let contacts = S.get("contacts", {});
   let videos = S.get("videos", {});
+  let home = S.get("home", null);
   function switchKid(id) {
     activeKid = id; raw.set("activeKid", id); loadKid();
   }
@@ -311,7 +312,32 @@
   function activitiesForAge(m) { return ACTIVITIES.filter(a => a.min <= m && a.max >= m); }
   function tipsForAge(m) { const mm = Math.max(4, m); return TIPS.filter(t => t.min <= mm && t.max >= mm); }
 
-  const withinKm = e => evKm === 0 || e.km == null || e.km === "" || e.km <= evKm;
+  /* ---------------- Comune e distanze ---------------- */
+  const DEFAULT_HOME = { name: "Montecchio Maggiore", prov: "Vicenza", lat: 45.5049, lon: 11.4115 };
+  const homeOf = () => (home && home.lat != null ? home : DEFAULT_HOME);
+  function haversine(a, b) {
+    const R = 6371, rad = x => x * Math.PI / 180;
+    const dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  // Il catalogo di eventi e luoghi è pensato per la zona di Montecchio Maggiore
+  const isLocalArea = () => haversine([homeOf().lat, homeOf().lon], [DEFAULT_HOME.lat, DEFAULT_HOME.lon]) <= 30;
+  function coordsOf(x) {
+    if (x.lat != null && x.lon != null) return [Number(x.lat), Number(x.lon)];
+    const txt = [x.town, x.addr, x.place].filter(Boolean).join(" ");
+    const t = Object.keys(window.TOWN_COORDS || {}).find(name => txt.includes(name));
+    return t ? TOWN_COORDS[t] : null;
+  }
+  // Distanza indicativa su strada (linea d'aria × 1,2), oppure quella scritta a mano se manca il comune
+  function distKm(x) {
+    const c = coordsOf(x), h = homeOf();
+    if (c) return Math.round(haversine([h.lat, h.lon], c) * 1.2);
+    return x.km != null && x.km !== "" && !home ? Number(x.km) : null;
+  }
+  const kmLabel = d => (d == null ? "" : d < 3 ? "vicino a te" : "~" + d + " km");
+  const withinKm = e => { const d = distKm(e); return evKm === 0 || d == null || d <= evKm; };
+  const googleUrl = q => "https://www.google.com/search?q=" + encodeURIComponent(q);
   const isOngoing = e => e.start && e.end && parseISO(e.start) <= today0();
 
   function upcomingEvents() {
@@ -687,7 +713,7 @@
       ${d ? dateBox(ev) : `<div class="datebox tbd">${ev.e || "📅"}</div>`}
       <div class="grow" style="min-width:0">
         <h3>${d ? (ev.e || "") + " " : ""}${esc(ev.t)}</h3>
-        <div class="where">${when}${place ? "<br>📍 " + place : ""}${ev.km != null && ev.km !== "" ? " · " + (ev.km ? "~" + ev.km + " km" : "in paese") : ""}</div>
+        <div class="where">${when}${place ? "<br>📍 " + place : ""}${distKm(ev) != null ? " · " + kmLabel(distKm(ev)) : ""}</div>
         ${ev.age ? `<span class="tag green">👶 ${esc(ev.age)}</span>` : ""}${ev.mine ? `<span class="tag purple">Aggiunto da te</span>` : ""}${ev.status ? `<span class="tag ${ev.status === "confermato" ? "green" : "yellow"}">${esc(ev.status)}</span>` : ""}
         ${ev.desc ? `<p class="small" style="margin:8px 0 0">${esc(ev.desc)}</p>` : ""}
         <div class="btn-row">
@@ -717,7 +743,7 @@
     return `<div class="card"><div class="row" style="align-items:flex-start">
       <div class="big-emoji">${p.e}</div>
       <div class="grow"><h3 style="margin:0 0 2px">${esc(p.t)}</h3>
-        <div class="small muted">${esc(p.addr)}${p.km ? " · ~" + p.km + " km" : ""}</div>
+        <div class="small muted">${esc(p.addr)}${distKm(p) != null ? " · " + kmLabel(distKm(p)) : ""}</div>
         <span class="tag">${esc(p.cat)}</span>
         <p class="small" style="margin:8px 0 0">${esc(p.desc)}</p>
         <div class="btn-row">
@@ -732,18 +758,41 @@
     const kmChips = `<div class="chips">${[[15, "Entro 15 km"], [30, "Entro 30 km"], [50, "Entro 50 km"], [0, "Tutti"]]
       .map(([v, l]) => `<button class="chip ${evKm === v ? "on" : ""}" data-act="set-km" data-v="${v}">${l}</button>`).join("")}</div>`;
     const staleDays = daysBetween(parseISO(EVENTS_UPDATED), today0());
+    const h = homeOf();
+    const homeLine = `<div class="home-line small">📍 Nella zona di <b>${esc(h.name)}</b> <a href="#/impostazioni" data-act="goto-home">Cambia comune</a></div>`;
+    const month = today0().getMonth();
+    const searches = [
+      ["🎈", "Eventi per bambini questo weekend", "eventi bambini " + h.name + " questo weekend"],
+      ["📚", "Letture per piccolissimi in biblioteca", "biblioteca " + h.name + " letture bambini 0-3 anni"],
+      ["🎭", "Teatro per famiglie", "teatro per famiglie bambini " + (h.prov || h.name)],
+      month >= 10 || month === 0 ? ["🎄", "Mercatini e Natale", "mercatini di Natale bambini " + h.name] : ["🌳", "Feste e sagre", "feste sagre " + h.name]
+    ];
+    const searchCard = `<div class="card"><div class="card-kicker">🔎 Cerca nella zona di ${esc(h.name)}</div>
+      ${searches.map(([e, t, q]) => `<a class="food" href="${googleUrl(q)}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}
+      <p class="small muted" style="margin:8px 0 0">Quando trovi qualcosa di adatto, aggiungilo con «➕ Aggiungi un evento».</p></div>`;
     let body = "";
     if (ui.evTab === "prossimi") {
       const up = upcomingEvents();
       const tbd = EVENTS.filter(e => !e.start && withinKm(e));
-      body = `${kmChips}
-        <div class="note small">📌 Elenco aggiornato al ${fmt(parseISO(EVENTS_UPDATED), { day: "numeric", month: "long", year: "numeric" })}${staleDays > 30 ? ` (<b>più di un mese fa</b>: guarda anche le <a href="#/eventi" data-act="set" data-k="evTab" data-v="fonti">fonti</a>)` : ""}. Prima di andare <b>controlla sempre date e orari sul sito dell'organizzatore</b>.</div>
+      const local = isLocalArea();
+      body = `${homeLine}${kmChips}
+        ${!local ? `<div class="note small">Il nostro elenco di eventi copre la zona di Montecchio Maggiore e dintorni (Vicenza, Verona, Padova, Bassano). Per ${esc(h.name)} trovi qui sotto le ricerche già pronte, e puoi aggiungere gli eventi che trovi.</div>${searchCard}` : ""}
+        ${local ? `<div class="note small">📌 Elenco aggiornato al ${fmt(parseISO(EVENTS_UPDATED), { day: "numeric", month: "long", year: "numeric" })}${staleDays > 30 ? ` (<b>più di un mese fa</b>: guarda anche le <a href="#/eventi" data-act="set" data-k="evTab" data-v="fonti">fonti</a>)` : ""}. Prima di andare <b>controlla sempre date e orari sul sito dell'organizzatore</b>.</div>` : ""}
         ${up.map(eventCard).join("") || `<div class="empty"><b>📅</b>Nessun evento in arrivo con data certa.</div>`}
         ${tbd.length ? `<div class="section-title"><h2>In arrivo, date da confermare</h2></div>${tbd.map(eventCard).join("")}` : ""}
-        <button class="btn ghost block" data-act="ev-add" style="margin-top:8px">➕ Aggiungi un evento che hai trovato</button>`;
+        <button class="btn ghost block" data-act="ev-add" style="margin-top:8px">➕ Aggiungi un evento che hai trovato</button>
+        ${local ? `<div style="margin-top:14px">${searchCard}</div>` : ""}`;
     } else if (ui.evTab === "luoghi") {
-      const places = PLACES.filter(withinKm).sort((a, b) => a.km - b.km);
-      body = `${kmChips}<p class="small muted">Servizi, piscine, passeggiate e luoghi a misura di passeggino intorno a Montecchio Maggiore.</p>${places.map(placeCard).join("") || `<div class="empty"><b>📍</b>Nessun luogo in questo raggio.</div>`}`;
+      const places = PLACES.filter(withinKm).sort((a, b) => (distKm(a) || 0) - (distKm(b) || 0));
+      const near = [
+        ["📚", "Biblioteca", "biblioteca " + h.name], ["🤱", "Consultorio familiare", "consultorio familiare vicino a " + h.name],
+        ["🏥", "Pronto soccorso pediatrico", "pronto soccorso pediatrico vicino a " + h.name], ["🏊", "Piscina con acquaticità neonatale", "piscina acquaticità neonatale vicino a " + h.name],
+        ["🛝", "Parchi giochi", "parco giochi " + h.name], ["💊", "Farmacia di turno", "farmacia di turno " + h.name]
+      ];
+      body = `${homeLine}
+        <div class="card"><div class="card-kicker">🗺️ Vicino a te, sulla mappa</div>
+          ${near.map(([e, t, q]) => `<a class="food" href="${q.startsWith("farmacia") ? googleUrl(q) : mapsUrl(q)}" target="_blank" rel="noopener"><span class="st">${e}</span><span class="grow">${esc(t)}</span><span class="muted">›</span></a>`).join("")}</div>
+        ${places.length ? `<div class="section-title"><h2>Luoghi consigliati</h2></div>${kmChips}${places.map(placeCard).join("")}` : (isLocalArea() ? `${kmChips}<div class="empty"><b>📍</b>Nessun luogo consigliato in questo raggio.</div>` : "")}`;
     } else {
       body = `<div class="card"><h2>🔎 Dove trovare nuovi eventi</h2>
         <p class="small muted">Questi siti pubblicano spesso iniziative per famiglie. Quando ne trovi una adatta, aggiungila con «➕» nella scheda Prossimi.</p>
@@ -1028,7 +1077,7 @@
         <p class="small muted" style="margin:10px 0 0">Età indicative: il calendario preciso lo concordi con il pediatra. Spunta quando l'avete fatto.</p></div>
       <div class="section-title"><h2>💉 Vaccinazioni</h2></div>
       <div class="card">${split(VACCINES.map(v => ({ id: "v:" + v.id, m: v.m, html: item("v:" + v.id, v.t, v.m, v.items.map(esc).join(" · ")) })))}
-        <p class="small muted" style="margin:10px 0 0">Calendario indicativo nazionale. La ULSS 8 Berica vi manda la lettera di invito con data e ora: quando arriva, aggiungila come appuntamento. Per dubbi chiedi al pediatra o al servizio vaccinazioni.</p></div>`;
+        <p class="small muted" style="margin:10px 0 0">Calendario indicativo nazionale. ${isLocalArea() ? "La ULSS 8 Berica" : "La vostra ASL/ULSS"} vi manda la lettera di invito con data e ora: quando arriva, aggiungila come appuntamento. Per dubbi chiedi al pediatra o al servizio vaccinazioni.</p></div>`;
   }
 
   function openAddAppt() {
@@ -1107,7 +1156,8 @@
           <button class="btn" type="submit">Salva</button>
         </form></details>
       <div class="section-title"><h2>🏥 Pronto soccorso vicini</h2></div>
-      ${HOSPITALS.map(h => `<a class="card list-card" href="${mapsUrl(h.q)}" target="_blank" rel="noopener"><div class="big-emoji">🏥</div><div class="grow"><h3>${esc(h.t)}</h3><div class="meta">~${h.km} km · apri nelle mappe</div></div><span class="muted">›</span></a>`).join("")}
+      ${HOSPITALS.filter(h => (distKm(h) ?? 0) <= 40).map(h => `<a class="card list-card" href="${mapsUrl(h.q)}" target="_blank" rel="noopener"><div class="big-emoji">🏥</div><div class="grow"><h3>${esc(h.t)}</h3><div class="meta">${kmLabel(distKm(h))} · apri nelle mappe</div></div><span class="muted">›</span></a>`).join("")}
+      <a class="card list-card" href="${mapsUrl("pronto soccorso pediatrico vicino a " + homeOf().name)}" target="_blank" rel="noopener"><div class="big-emoji">🗺️</div><div class="grow"><h3>Il pronto soccorso più vicino</h3><div class="meta">Cerca sulla mappa nella zona di ${esc(homeOf().name)}</div></div><span class="muted">›</span></a>
       <div class="section-title"><h2>📖 Cosa fare</h2></div>
       ${videoBlock("emergenze", EMERGENCY_VIDEOS, "disostruzione pediatrica lattante croce rossa")}
       ${EMERGENCY_GUIDE.map((g, i) => `<details class="group" ${i === 0 ? "open" : ""}><summary>${g.e} ${esc(g.t)}</summary><div class="prose" style="padding:0 16px 14px">${g.html}</div></details>`).join("")}
@@ -1275,11 +1325,12 @@
     (raw.get("myEvents", []) || []).forEach(x => { if (x && x.id) f["myEvents:" + x.id] = x; });
     const vd = raw.get("videos", {}) || {}; Object.keys(vd).forEach(id => { f["videos:" + id] = vd[id]; });
     const ct = raw.get("contacts", {}) || {}; if (Object.keys(ct).length) f.contacts = ct;
+    const hm = raw.get("home", null); if (hm) f.home = hm;
     return f;
   }
   function unflatten(f) {
     const ks = [], per = {}, fv = {}, ev = [], vd = {};
-    let ct = {};
+    let ct = {}, hm = null;
     Object.keys(f).forEach(key => {
       const v = f[key], p = key.split(":");
       if (p[0] === "kid") ks.push(v);
@@ -1293,6 +1344,7 @@
       else if (p[0] === "myEvents") ev.push(v);
       else if (p[0] === "videos") vd[p.slice(1).join(":")] = v;
       else if (key === "contacts") ct = v;
+      else if (key === "home") hm = v;
     });
     applyingRemote = true;
     try {
@@ -1306,8 +1358,9 @@
         SYNC_KID_LISTS.forEach(n => raw.set("k." + k.id + "." + n, (d[n] || []).sort((a, b) => String(a.id).localeCompare(String(b.id)))));
       });
       raw.set("favs", fv); raw.set("myEvents", ev); raw.set("videos", vd); raw.set("contacts", ct);
+      if (hm) raw.set("home", hm); else raw.del("home");
     } finally { applyingRemote = false; }
-    favs = fv; myEvents = ev; videos = vd; contacts = ct;
+    favs = fv; myEvents = ev; videos = vd; contacts = ct; home = hm;
     if (!kids.some(k => k.id === activeKid)) activeKid = kids.length ? kids[0].id : null;
     raw.set("activeKid", activeKid);
     loadKid();
@@ -1439,14 +1492,43 @@
     if (!inv) { toast("Codice di invito non valido"); return; }
     if (kids.length && !confirm("Sostituire i dati di questo telefono con quelli condivisi dalla famiglia?")) return;
     applyingRemote = true;
-    try { Object.keys(localStorage).filter(k => /^pp\.(k\.|kids$|favs$|myEvents$|videos$|contacts$)/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
+    try { Object.keys(localStorage).filter(k => /^pp\.(k\.|kids$|favs$|myEvents$|videos$|contacts$|home$)/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
     applyingRemote = false;
-    kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; activeKid = null; raw.set("activeKid", null); loadKid();
+    kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; home = null; activeKid = null; raw.set("activeKid", null); loadKid();
     raw.set("sync", { url: inv.u, key: inv.k, seq: 0, meta: {}, last: 0, err: "" });
     closeSheet(); toast("Collegamento in corso…");
     const ok = await syncNow(false);
     location.hash = "#/oggi"; render(false);
     toast(ok ? (kids.length ? "Benvenuto in famiglia! 🎉" : "Collegato! Ora inserisci il tuo bimbo per iniziare 🌱") : "Non riesco a collegarmi: controlla la connessione e riprova da Impostazioni");
+  }
+
+  /* ---------------- Scelta del comune (OpenStreetMap) ---------------- */
+  let homeResults = [];
+  const placeName = a => a && (a.city || a.town || a.village || a.municipality || a.hamlet);
+  async function searchComune(q) {
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=it&addressdetails=1&limit=10&accept-language=it&q=" + encodeURIComponent(q));
+    const list = await r.json();
+    const seen = {};
+    return list.map(x => ({ name: placeName(x.address) || x.name, prov: (x.address && (x.address.county || x.address.state_district)) || "", region: (x.address && x.address.state) || "", lat: Number(x.lat), lon: Number(x.lon) }))
+      .filter(x => x.name && !seen[x.name + x.prov] && (seen[x.name + x.prov] = true));
+  }
+  function setHome(h) {
+    home = { name: h.name, prov: (h.prov || "").replace(/^Provincia di /, ""), lat: Number(h.lat.toFixed(4)), lon: Number(h.lon.toFixed(4)) };
+    S.set("home", home); closeSheet(); toast("Comune impostato: " + home.name + " 📍"); render(true);
+  }
+  function useMyPosition() {
+    if (!navigator.geolocation) { toast("Questo telefono non permette di leggere la posizione"); return; }
+    toast("Cerco la tua posizione…");
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      let name = "La tua zona", prov = "";
+      try {
+        const r = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&accept-language=it&lat=" + lat + "&lon=" + lon);
+        const j = await r.json();
+        name = placeName(j.address) || name; prov = (j.address && (j.address.county || j.address.state_district)) || "";
+      } catch (e) { /* senza connessione resta «La tua zona» */ }
+      setHome({ name, prov, lat, lon });
+    }, () => toast("Non ho il permesso di leggere la posizione: cerca il comune per nome"), { timeout: 15000, maximumAge: 600000 });
   }
 
   /* ---------------- Impostazioni ---------------- */
@@ -1464,6 +1546,12 @@
         <h2>👨‍👩‍👧‍👦 I vostri figli</h2>
         <div style="margin:0 -16px">${kids.map(kidRow).join("")}</div>
         <button class="btn ghost block" data-act="kid-add" style="margin-top:10px">➕ Aggiungi un figlio</button>
+      </div>
+      <div class="card">
+        <h2>📍 Il tuo comune</h2>
+        <p class="small">Serve per le distanze di eventi e luoghi, per le ricerche «vicino a te» e per il pronto soccorso più vicino. Ora: <b>${esc(homeOf().name)}</b>${home ? "" : " (predefinito)"}.</p>
+        <form id="homeForm" class="row"><input type="search" name="q" class="grow" placeholder="Cerca il comune…" required><button class="btn" type="submit">Cerca</button></form>
+        <div class="btn-row"><button class="btn ghost small" data-act="home-gps">📍 Usa la mia posizione</button>${home ? `<button class="btn ghost small" data-act="home-reset">↩️ Torna a Montecchio Maggiore</button>` : ""}</div>
       </div>
       <div class="card">
         <h2>🎨 Aspetto</h2>
@@ -1514,6 +1602,9 @@
         break;
       case "play": openVideo(t.dataset.id, t.dataset.t); break;
       case "sync-setup": openSyncSetup(); break;
+      case "home-gps": useMyPosition(); break;
+      case "home-reset": home = null; raw.del("home"); onLocalChange("home"); toast("Comune: Montecchio Maggiore"); render(true); break;
+      case "home-pick": { const hh = homeResults[Number(t.dataset.i)]; if (hh) setHome(hh); break; }
       case "sync-join": openSyncJoin(""); break;
       case "sync-now": syncNow(true); break;
       case "sync-invite": openInvite(); break;
@@ -1676,6 +1767,17 @@
       if (f.id === "welcomeForm") switchKid(activeKid);
       if (f.id === "settingsForm") toast("Salvato ✅");
       location.hash = "#/oggi"; render(false);
+    } else if (f.id === "homeForm") {
+      const q = String(fd.get("q") || "").trim();
+      if (!q) return;
+      toast("Cerco…");
+      searchComune(q).then(list => {
+        homeResults = list;
+        if (!list.length) { toast("Nessun comune trovato con questo nome"); return; }
+        openSheet(`<h2>📍 Scegli il comune</h2><div class="card" style="padding:0;overflow:hidden">
+          ${list.map((x, i) => `<button class="food" data-act="home-pick" data-i="${i}"><span class="st">📍</span><span class="grow"><b>${esc(x.name)}</b><br><span class="small muted">${esc([x.prov, x.region].filter(Boolean).join(" · "))}</span></span><span class="muted">›</span></button>`).join("")}
+        </div><button class="btn ghost block" data-act="close" style="margin-top:8px">Annulla</button>`);
+      }).catch(() => toast("Serve la connessione a internet per cercare il comune"));
     } else if (f.id === "syncSetupForm") {
       const url = String(fd.get("url") || "").trim();
       if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec/.test(url)) { toast("L'indirizzo deve iniziare con https://script.google.com e finire con /exec"); return; }

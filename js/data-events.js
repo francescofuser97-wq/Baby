@@ -217,7 +217,7 @@ window.PLACES = [
   },
   {
     id: "piccionaia", t: "La Piccionaia – teatro per famiglie", e: "🎭", cat: "Cultura",
-    addr: "Teatro Astra e altri teatri del Vicentino", tel: "", km: 13,
+    addr: "Teatro Astra e altri teatri del Vicentino", town: "Vicenza", tel: "", km: 13,
     desc: "La compagnia teatrale vicentina che organizza spettacoli per famiglie, alcuni dedicati ai piccolissimi (dai 12-18 mesi). Tieni d'occhio il calendario.",
     link: "https://www.piccionaia.org/centro-teatrale-piccionaia/calendario/eventi-per-famiglie/", q: "Teatro Astra Vicenza"
   }
@@ -238,3 +238,19 @@ window.EVENT_SOURCES = [
   { t: "Biblioteca di Valdagno", link: "https://bibliotecavaldagno.it/" },
   { t: "Nati per Leggere", link: "https://www.natiperleggere.it/" }
 ];
+
+/* Coordinate (lat, lon) dei comuni usati negli eventi e nei luoghi, per calcolare le distanze
+   dal comune scelto in Impostazioni. Chi aggiunge eventi in un comune nuovo lo aggiunga qui
+   (oppure metta lat/lon direttamente nell'evento). */
+window.TOWN_COORDS = {
+  "Montecchio Maggiore": [45.5049, 11.4115], "Arzignano": [45.5206, 11.3340], "Valdagno": [45.6475, 11.3017],
+  "Vicenza": [45.5455, 11.5354], "Verona": [45.4384, 10.9916], "Padova": [45.4064, 11.8768],
+  "Bassano del Grappa": [45.7663, 11.7344], "Asiago": [45.8753, 11.5094], "Arcugnano": [45.4720, 11.5390],
+  "Schio": [45.7136, 11.3594], "Thiene": [45.7085, 11.4775], "Lonigo": [45.3866, 11.3887], "Marostica": [45.7466, 11.6559],
+  "Sovizzo": [45.5267, 11.4462], "Brendola": [45.4722, 11.4440], "Trissino": [45.5616, 11.3746],
+  "Montebello Vicentino": [45.4588, 11.3838], "Altavilla Vicentina": [45.5126, 11.4683], "Creazzo": [45.5317, 11.4808],
+  "Chiampo": [45.5449, 11.2810], "Recoaro Terme": [45.7067, 11.2245], "San Bonifacio": [45.3961, 11.2717],
+  "Soave": [45.4199, 11.2464], "Bussolengo": [45.4723, 10.8509], "Castelfranco Veneto": [45.6712, 11.9268],
+  "Cittadella": [45.6480, 11.7838], "Noventa Vicentina": [45.2911, 11.5410], "Dueville": [45.6375, 11.5480],
+  "Camisano Vicentino": [45.5225, 11.7086], "Torri di Quartesolo": [45.5178, 11.6201], "Isola Vicentina": [45.6301, 11.4458]
+};

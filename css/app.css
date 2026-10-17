@@ -420,3 +420,8 @@ details[data-care] summary { align-items: flex-start; }
 .invite-box { width: 100%; min-height: 150px; font-size: .85rem; }
 .steps.small li { font-size: .9rem; }
 code { font-size: .85em; background: var(--surface-2); padding: 1px 5px; border-radius: 6px; }
+
+/* Comune */
+.home-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 2px 2px 10px; color: var(--muted); }
+.home-line a { font-weight: 700; text-decoration: none; }
+a.food { color: var(--ink); text-decoration: none; }

@@ -11,6 +11,8 @@ Web app installabile (PWA) per accompagnare lo svezzamento e la crescita del bam
 - **Emergenze** (🆘 in alto): numeri utili, pronto soccorso vicini, disostruzione, febbre, ingestioni, ustioni.
 - **Eventi**: eventi e luoghi a misura di bebè intorno a Montecchio Maggiore, con mappa, aggiunta al calendario ed eventi personali.
 
+**Il tuo comune** (Impostazioni): le distanze di eventi e luoghi, le ricerche «vicino a te» (biblioteca, consultorio, pronto soccorso pediatrico, piscina, parchi, farmacia di turno) e il pronto soccorso più vicino si calcolano dal comune scelto, cercandolo per nome o con la posizione del telefono (OpenStreetMap). Il catalogo di eventi copre la zona di Montecchio Maggiore; per gli altri comuni l'app propone ricerche già pronte.
+
 **Più figli**: ogni figlio ha il suo profilo (selettore in alto con il nome). Diario, allergeni, crescita, agenda, giochi fatti e domande sono separati; preferiti, eventi, numeri di emergenza e tema sono in comune. L'agenda ha anche la vista «Tutta la famiglia».
 
 Funziona offline. Nel codice non c'è nessun dato personale: nomi, date di nascita e diario restano sul telefono, oppure nel **tuo** Google Drive se attivi la condivisione.
