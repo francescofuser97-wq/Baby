@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.1.0";
+  const VERSION = "4.1.1";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -431,7 +431,8 @@
       try {
         const res = await fetchTimeout(svc, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "news", q: queries }) }, 20000);
         const data = await res.json();
-        if (data && Array.isArray(data.items)) return { items: data.items, via: "servizio" };
+        // se il servizio non è riuscito a leggere Google News (errors e nessuna notizia) si prova con i lettori pubblici
+        if (data && Array.isArray(data.items) && (data.items.length || !data.errors)) return { items: data.items, via: "servizio" };
       } catch (e) { /* si passa ai servizi pubblici */ }
     }
     const all = [];

@@ -4,5 +4,5 @@
    senza che ognuno debba creare un servizio proprio. Lascialo vuoto ("") per non usarlo:
    ogni famiglia potrà comunque collegare un proprio servizio da Impostazioni. */
 window.PP_CONFIG = {
-  serviceUrl: ""
+  serviceUrl: "https://script.google.com/macros/s/AKfycbzhPsIpZsoIMkSih0SzoZFCIjdrotUf9mtx_4PrmRyc6BFeiCeQBF1Z5J0VhpNPeiEHNg/exec"
 };

@@ -12,9 +12,10 @@
  *   Esegui come: Me · Chi ha accesso: Chiunque
  */
 var FILE_PREFIX = 'piccoli-passi-';
+var VERSION = 3;
 
 function doGet() {
-  return json_({ ok: true, app: 'piccoli-passi', msg: 'Servizio di condivisione attivo.' });
+  return json_({ ok: true, app: 'piccoli-passi', v: VERSION, msg: 'Servizio di condivisione attivo.' });
 }
 
 function doPost(e) {
@@ -49,7 +50,8 @@ function doPost(e) {
         applied++;
       }
     }
-    if (applied || !file) {
+    // il file si crea solo alla prima modifica: una semplice lettura non lascia file vuoti nel Drive
+    if (applied) {
       var text = JSON.stringify(db);
       if (file) file.setContent(text); else DriveApp.createFile(name, text, 'application/json');
     }
@@ -68,32 +70,36 @@ function doPost(e) {
   }
 }
 
-/* Notizie da Google News per alcune ricerche (max 5), tenute in memoria per 3 ore */
+/* Notizie da Google News per alcune ricerche (max 5), tenute in memoria per 3 ore.
+   Se una ricerca non riesce, il motivo torna in «errors» (e non viene messo in memoria). */
 function news_(queries) {
   var cache = CacheService.getScriptCache();
-  var items = [];
+  var items = [], errors = [];
   (queries || []).slice(0, 5).forEach(function (q) {
     q = String(q).slice(0, 150);
-    var ck = 'n:' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, q));
+    var ck = 'n3:' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, q));
     var hit = cache.get(ck);
     if (hit) { items = items.concat(JSON.parse(hit)); return; }
-    var found = [];
+    var found = [], text = '';
     try {
       var url = 'https://news.google.com/rss/search?q=' + encodeURIComponent(q) + '&hl=it&gl=IT&ceid=IT:it';
-      var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-      if (res.getResponseCode() === 200) {
-        var channel = XmlService.parse(res.getContentText()).getRootElement().getChild('channel');
-        channel.getChildren('item').slice(0, 10).forEach(function (it) {
-          var src = it.getChild('source');
-          var desc = String(it.getChildText('description') || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 400);
-          found.push({ t: it.getChildText('title'), l: it.getChildText('link'), d: it.getChildText('pubDate'), s: src ? src.getText() : '', x: desc });
-        });
-      }
-    } catch (err) { /* ricerca saltata */ }
+      var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+      text = res.getContentText();
+      if (res.getResponseCode() !== 200) { errors.push('HTTP ' + res.getResponseCode() + ': ' + text.slice(0, 120)); return; }
+      var channel = XmlService.parse(text).getRootElement().getChild('channel');
+      channel.getChildren('item').slice(0, 10).forEach(function (it) {
+        var src = it.getChild('source');
+        var desc = String(it.getChildText('description') || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 400);
+        found.push({ t: it.getChildText('title'), l: it.getChildText('link'), d: it.getChildText('pubDate'), s: src ? src.getText() : '', x: desc });
+      });
+    } catch (err) {
+      errors.push(String(err && err.message || err).slice(0, 200) + (text ? ' · ' + text.slice(0, 120) : ''));
+      return;
+    }
     try { cache.put(ck, JSON.stringify(found), 10800); } catch (err) { /* troppo grande per la cache */ }
     items = items.concat(found);
   });
-  return { items: items };
+  return errors.length ? { items: items, errors: errors } : { items: items };
 }
 
 function json_(o) {
