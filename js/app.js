@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.3.2";
+  const VERSION = "4.3.3";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -295,7 +295,8 @@
     <div class="card center">
       <button class="btn block" data-act="sync-now">🔄 Riprova adesso</button>
       <p class="small muted" style="margin:12px 0 0">Chi ti ha invitato deve aver già attivato la condivisione sul suo telefono.</p>
-      <button class="link-btn small" data-act="sync-leave" style="margin-top:10px">Annulla e inizia senza condivisione</button>
+      <button class="btn ghost block" data-act="sync-check" style="margin-top:12px">🔍 Verifica il collegamento</button>
+      <button class="link-btn small" data-act="sync-leave" style="margin-top:12px">Annulla e inizia senza condivisione</button>
     </div>`;
     return `<div class="welcome">
       <img src="icons/icon.svg" alt="">
@@ -1887,7 +1888,8 @@
       catch (e) { throw new Error(res.status === 404 || /impossibile aprire il file|unable to open the file/i.test(txt) ? "il servizio Google è momentaneamente occupato" : "risposta non valida dal servizio"); }
     } catch (err) {
       if (err.name === "AbortError") throw new Error("il servizio Google non ha risposto in tempo");
-      if (err instanceof TypeError) throw new Error("connessione assente o servizio non raggiungibile");
+      // un errore di rete del browser: connessione assente, indirizzo bloccato o pagina d'errore di Google
+      if (err instanceof TypeError) throw Object.assign(new Error("il servizio non è raggiungibile da questo telefono"), { net: true });
       throw err;
     } finally { clearTimeout(tm); }
   }
@@ -1945,7 +1947,7 @@
       if (cfg.full) Object.keys(cur).forEach(n => { if (!onServer.has(n)) { delete newMeta[n]; resend = true; } });
       const saved = Object.assign({}, raw.get("sync", cfg), { seq: data.seq, meta: newMeta, last: Date.now(), err: "" });
       if (data.id) saved.epoch = data.id;
-      delete saved.full;
+      delete saved.full; delete saved.triedCentral;
       raw.set("sync", saved);
       syncFails = 0;
       if (dirty.length || resend) syncTimer = setTimeout(() => syncNow(false), 1500);
@@ -1953,6 +1955,15 @@
       if (manual) toast(changed ? "Dati aggiornati dalla famiglia ✅" : "Tutto sincronizzato ✅");
       return true;
     } catch (err) {
+      // Servizio dello spazio irraggiungibile: se quello dell'app ha già questo spazio (stesso Drive), si passa lì
+      const central = centralUrl();
+      if (err && err.net && central && cfg.url !== central && !cfg.triedCentral) {
+        try {
+          const codec = await getCodec(cfg), probe = await postSync(central, { key: codec.space, since: 0, changes: [] });
+          if (probe && probe.seq > 0) { raw.set("sync", Object.assign(raw.get("sync", cfg), { url: central, err: "" })); syncAgain = manual ? "manual" : "auto"; return false; }
+        } catch (e2) { /* anche il servizio dell'app non risponde */ }
+        raw.set("sync", Object.assign(raw.get("sync", cfg), { triedCentral: true }));
+      }
       const c = raw.get("sync", null);
       if (c) {
         raw.set("sync", Object.assign(c, { err: String(err && err.message || err) }));
@@ -2022,6 +2033,7 @@
           <button class="btn" data-act="sync-invite">📨 Invita qualcuno</button>
           <button class="btn ghost" data-act="sync-now">🔄 Sincronizza ora</button>
         </div>
+        ${c.err ? `<button class="btn ghost block" data-act="sync-check" style="margin-top:10px">🔍 Verifica il collegamento</button>` : ""}
         ${c.v !== 2 ? `<button class="btn block" data-act="sync-encrypt" style="margin-top:10px">🔒 Passa alla cifratura</button>` : ""}
         <button class="btn ghost block" data-act="sync-newfamily" style="margin-top:10px">🏠 Crea uno spazio per un'altra famiglia</button>
         ${own ? `<button class="btn ghost block" data-act="sync-update" style="margin-top:8px">🛠️ Aggiorna il servizio Google</button>` : ""}
@@ -2066,6 +2078,40 @@
         <div class="btn-row"><button class="btn" type="submit" style="flex:1">Unisciti</button><button class="btn ghost" type="button" data-act="close">Annulla</button></div>
       </form>`);
   }
+  // Verifica del collegamento: cosa raggiunge questo telefono (da mandare a chi aiuta, senza dati personali)
+  async function openSyncCheck() {
+    const c = raw.get("sync", null);
+    if (!c) return;
+    const central = centralUrl(), idOf = u => { const m = String(u).match(/\/s\/([^/]+)\//); return m ? "…" + m[1].slice(-8) : String(u).replace(/^https?:\/\//, "").slice(0, 40); };
+    const rows = [];
+    const draw = done => openSheet(`<h2>🔍 Verifica del collegamento</h2>
+      <div class="card" style="padding:0;overflow:hidden">${rows.map(r => `<div class="food"><span class="st">${r.ok == null ? "⏳" : r.ok ? "✅" : "❌"}</span><span class="grow">${esc(r.t)}<br><span class="small muted">${esc(r.d || "")}</span></span></div>`).join("")}</div>
+      <p class="small muted">${done ? "Se qualcosa è ❌, fai uno screenshot di questa pagina e mandalo a chi ti aiuta: non contiene dati personali." : "Verifico…"} Versione ${VERSION}.</p>
+      <button class="btn ghost block" data-act="close">Chiudi</button>`);
+    const step = async (t, fn) => {
+      const r = { t, ok: null }; rows.push(r); draw(false);
+      const t0 = Date.now();
+      try { r.d = await fn(); r.ok = true; } catch (e) { r.ok = false; r.d = String(e && e.message || e); }
+      r.d = (r.d || "") + " · " + ((Date.now() - t0) / 1000).toFixed(1) + " s";
+      draw(false);
+    };
+    const getJson = async u => {
+      const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 30000);
+      try { const res = await fetch(u, { signal: ctl.signal, cache: "no-store" }); const txt = await res.text(); try { return JSON.parse(txt); } catch (e) { throw new Error("risposta " + res.status + " non valida: " + txt.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80)); } }
+      catch (e) { if (e.name === "AbortError") throw new Error("nessuna risposta in 30 secondi"); throw new Error(e instanceof TypeError ? "non raggiungibile (" + e.message + ")" : e.message); }
+      finally { clearTimeout(tm); }
+    };
+    await step("Internet", async () => { await fetch(location.origin + location.pathname + "manifest.webmanifest?ping=" + Date.now(), { cache: "no-store" }); return navigator.onLine ? "collegato" : "il telefono risulta offline"; });
+    await step("Servizio di questo spazio " + idOf(c.url), async () => { const j = await getJson(c.url); return j.app === "piccoli-passi" ? "risponde (versione " + (j.v || "1-2") + ")" : "risponde, ma non è il servizio di Piccoli Passi"; });
+    if (central && central !== c.url) await step("Servizio dell'app " + idOf(central), async () => { const j = await getJson(central); return "risponde (versione " + (j.v || "1-2") + ")"; });
+    await step("Spazio della famiglia", async () => {
+      const codec = await getCodec(c), j = await postSync(c.url, { key: codec.space, since: 0, changes: [] });
+      if (j.error) throw new Error(j.error);
+      return j.seq > 0 ? "trovato, con " + plural(j.rec.length, "elemento", "elementi") : "non trovato: chi ha invitato deve aprire l'app e sincronizzare";
+    });
+    draw(true);
+  }
+
   function openInvite() {
     const code = inviteCode();
     const link = location.origin + location.pathname + "#/unisciti/" + code;
@@ -2304,6 +2350,7 @@
       case "home-pick": { const hh = homeResults[Number(t.dataset.i)]; if (hh) setHome(hh); break; }
       case "sync-join": openSyncJoin(""); break;
       case "sync-now": syncNow(true); break;
+      case "sync-check": openSyncCheck(); break;
       case "sync-invite": openInvite(); break;
       case "sync-newfamily": openNewFamily(); break;
       case "sync-update": openSyncUpdate(); break;
