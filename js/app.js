@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "4.1.1";
+  const VERSION = "4.2.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -400,8 +400,9 @@
   const newsServiceUrl = () => (window.PP_CONFIG && PP_CONFIG.serviceUrl) || (raw.get("sync", null) || {}).url || "";
   const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
   const GIORNI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
-  const EVENT_WORDS = /spettacol|teatr|laborator|lettur|letture|fiab|burattin|festa|feste|sagra|mercatin|concert|event|animazion|giochi|gioco|famigli|bambin|piccol|carneval|natale|befana|halloween|museo|mostra|bibliotec|circo|parco|weekend|domenica|sabato|cinema|musical|caccia al tesoro|presepe|luminarie/i;
-  const NOT_EVENT = /incident|mort[oaie]\b|muore|decess|arrest|rapin|omicid|violenz|indagin|ferit|tragedi|polizia|carabinier|incendi|maltempo|allerta|furto|truff|processo|sentenz|denunc|sequestr|annegat|aggress|schianto|scontro|lutto|funerale|ricoverat/i;
+  // parole che nel titolo indicano un evento (sul testo normalizzato: minuscolo, senza accenti)
+  const EVENT_WORDS = /spettacol|teatr|laborator|letture|lettura|fiab|burattin|\bfest[ae]\b|festival|festeggiament|\bsagr[ae]\b|mercatin|concert|\bevent[oi]\b|animazion|carneval|natale|befana|halloween|\bmuse[oi]\b|\bmostr[ae]\b|bibliotec|circo|cinema|musical|caccia al tesoro|presepe|luminarie|rassegna|appuntament|\bgiornat[ae]\b|\bfiera\b|passeggiat|camminata|visite guidate|cosa fare|weekend|fine settimana|manifestazion|sfilata|parata/;
+  const NOT_EVENT = /incident|mort[oaie]\b|muore|decess|arrest|rapin|omicid|violenz|indagin|ferit|tragedi|polizia|carabinier|incendi|maltempo|allerta|allarme|furto|truff|processo|sentenz|denunc|sequestr|annegat|aggress|schianto|scontro|lutto|funeral|ricoverat|\briss[ae]\b|caos|droga|spaccio|degrado|vandal|malore|malattia|tumor|ospedal|laurea|prezz|rincar|costo della vita|bollett|sciopero|calcio|serie [abcd]\b|partita|stadio|tifosi|elezion/;
   const normTxt = str => String(str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[’‘`´]/g, "'");
   function feedQueries() {
     const h = homeOf(), m = today0().getMonth(), c = '"' + h.name + '"';
@@ -457,20 +458,23 @@
   function eventDateFrom(text, pubMs, strict) {
     const t = normTxt(text), pub = new Date(pubMs || Date.now());
     const base = new Date(pub.getFullYear(), pub.getMonth(), pub.getDate());
-    const mesiN = MESI.map(normTxt), mesi = mesiN.join("|");
+    const mesiN = MESI.map(normTxt), mesi = "(" + mesiN.join("|") + ")";
+    const WD = "(?:(?:" + GIORNI.map(normTxt).join("|") + ")\\s+)?", N = "(\\d{1,2})°?", CONN = "\\s*(?:fino all'|fino al|all'|al|a|ed|e|-|–)\\s*(?:il\\s+|l')?";
     const mk = (d, mo) => {
       let dt = new Date(pub.getFullYear(), mo, d);
       if (dt < addDays(base, -45)) dt = new Date(pub.getFullYear() + 1, mo, d);
       return dt;
     };
     const ok = d => d >= 1 && d <= 31;
-    let m = t.match(new RegExp("\\b(\\d{1,2})°?\\s+(" + mesi + ")\\s*(?:al|-|–|fino al)\\s*(\\d{1,2})°?\\s+(" + mesi + ")\\b"));
+    // «dal 31 ottobre al 2 novembre», «sabato 31 ottobre e domenica 1 novembre»
+    let m = t.match(new RegExp("\\b" + WD + N + "\\s+" + mesi + CONN + WD + N + "\\s+" + mesi + "\\b"));
     if (m && ok(+m[1]) && ok(+m[3])) {
       const st = mk(+m[1], mesiN.indexOf(m[2])); let en = new Date(st.getFullYear(), mesiN.indexOf(m[4]), +m[3]);
       if (en < st) en = new Date(st.getFullYear() + 1, en.getMonth(), en.getDate());
       return { start: iso(st), end: iso(en) };
     }
-    m = t.match(new RegExp("\\b(\\d{1,2})°?(?:\\s*(?:e|al|-|–)\\s*(\\d{1,2}))?\\s+(" + mesi + ")\\b"));
+    // «25 ottobre», «dal 7 al 9 novembre», «da sabato 17 a domenica 25 ottobre», «dal 9 all'11 ottobre», «il 17 e il 18 ottobre»
+    m = t.match(new RegExp("\\b" + WD + N + "(?:" + CONN + WD + N + ")?\\s+" + mesi + "\\b"));
     if (m && ok(+m[1])) {
       const mo = mesiN.indexOf(m[3]), a = +m[1], b = m[2] ? +m[2] : null, st = mk(a, mo);
       return { start: iso(st), end: b && b > a && b <= 31 ? iso(new Date(st.getFullYear(), mo, b)) : "" };
@@ -478,14 +482,32 @@
     m = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?\b(?!\s*(?:anni|mesi|a\b))/);
     if (m && +m[2] >= 1 && +m[2] <= 12 && ok(+m[1])) return { start: iso(mk(+m[1], +m[2] - 1)), end: "" };
     if (strict) return null;
+    if (/\bdomani\b/.test(t)) return { start: iso(addDays(base, 1)), end: "" };
+    if (/\b(?:oggi|stasera|stanotte)\b/.test(t)) return { start: iso(base), end: "" };
     const days = GIORNI.map(normTxt).map((g, wd) => new RegExp("\\b" + g + "\\b").test(t) ? addDays(base, (wd - base.getDay() + 7) % 7) : null).filter(Boolean)
       .concat(/\bweekend|fine settimana\b/.test(t) ? [6, 0].map(wd => addDays(base, (wd - base.getDay() + 7) % 7)) : []).sort((x, y) => x - y);
     if (!days.length) return null;
     const last = days[days.length - 1];
     return { start: iso(days[0]), end: daysBetween(days[0], last) > 0 && daysBetween(days[0], last) <= 3 ? iso(last) : "" };
   }
+  // Nomi con cui i giornali citano il comune: «Bassano del Grappa» → anche «Bassano»
+  function placeKeys(name) {
+    const n = normTxt(name), short = n.split(/\s+(?:del|della|delle|dei|degli|di|d'|nell'|nella|sul|sulla|in|al|alla|terme|maggiore|minore|superiore|inferiore)\b/)[0].trim();
+    return short.length >= 4 && short !== n ? [n, short] : [n];
+  }
+  const reEsc = x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const mentions = (txt, keys) => keys.some(k => new RegExp("(^|[^a-z0-9])" + reEsc(k) + "([^a-z0-9]|$)").test(txt));
+  // Parole significative di un titolo, per riconoscere la stessa notizia data da testate diverse
+  const STOPW = new Set(MESI.concat(GIORNI).map(normTxt).concat(["questo", "questa", "della", "delle", "degli", "dalla", "dalle", "nella", "nelle", "alla", "alle", "sono", "tutti", "tutte", "anche", "come", "dove", "ecco", "oltre", "torna", "tornano"]));
+  const titleWords = (t, keys) => new Set(normTxt(t).split(/[^a-z0-9@]+/).filter(w => w.length >= 4 && !/^\d+$/.test(w) && !STOPW.has(w) && !keys.some(k => k.split(" ").includes(w))));
+  function sameNews(a, b) {
+    if (normTxt(a.t) === normTxt(b.t)) return true;
+    let n = 0;
+    a.w.forEach(x => { if (b.w.has(x)) n++; });
+    return n >= 2 && n / Math.min(a.w.size, b.w.size) >= 0.6 && (!a.ev || !b.ev || a.ev.start === b.ev.start);
+  }
   let feedLoading = false;
-  const FEED_V = 2;
+  const FEED_V = 3;
   async function loadFeed(force) {
     const h = homeOf();
     if (!h || feedLoading) return;
@@ -494,7 +516,7 @@
     feedLoading = true;
     try {
       const { items: rawItems, via } = await fetchNews(feedQueries());
-      const seen = {}, limit = Date.now() - 45 * 864e5, place = normTxt(h.name);
+      const limit = Date.now() - 45 * 864e5, keys = placeKeys(h.name);
       const items = rawItems.map(it => {
         // Google News mette la testata in fondo al titolo («… - Il Giornale di Vicenza»)
         const full = String(it.t || "").trim(), sm = full.match(/^(.*\S)\s+-\s+([^-]+)$/);
@@ -505,10 +527,17 @@
         if (rest.length < 25) x = "";
         return { t, l: it.l, s: src, d: parseNewsDate(it.d), x };
       }).filter(it => {
-        const all = normTxt(it.t + " " + it.x), key = normTxt(it.t);
-        return it.t && /^https:\/\//.test(it.l || "") && it.d > limit && all.includes(place) && EVENT_WORDS.test(it.t) && !NOT_EVENT.test(it.t)
-          && !seen[key] && (seen[key] = true);
+        const tt = normTxt(it.t), src = normTxt(it.s);
+        // il comune deve essere nel titolo, oppure la notizia viene dal Comune stesso (o da biblioteca e pro loco)
+        const here = mentions(normTxt(it.t + " " + it.x), keys) || (/^(?:comune|citta|biblioteca|pro loco)\b/.test(src) && mentions(src, keys));
+        return it.t && /^https:\/\//.test(it.l || "") && it.d > limit && here && EVENT_WORDS.test(tt) && !NOT_EVENT.test(tt);
       }).map(it => Object.assign(it, { ev: eventDateFrom(it.t, it.d) || (it.x ? eventDateFrom(it.x, it.d, true) : null) }))
+        // senza data restano solo le notizie delle ultime 3 settimane
+        .filter(it => it.ev || it.d > Date.now() - 21 * 864e5)
+        // prima quelle con la data, poi le più recenti; i doppioni (stessa notizia, altre testate) si scartano
+        .sort((a, b) => (b.ev ? 1 : 0) - (a.ev ? 1 : 0) || b.d - a.d)
+        .reduce((kept, it) => { it.w = titleWords(it.t, keys); if (!kept.some(k => sameNews(k, it))) kept.push(it); return kept; }, [])
+        .map(it => { delete it.w; return it; })
         .sort((a, b) => b.d - a.d).slice(0, 20);
       raw.set("feed", { v: FEED_V, place: h.name, at: Date.now(), items, ok: true, via });
     } catch (err) {
