@@ -136,7 +136,7 @@
     tip: "Alterna i cereali (riso, mais e tapioca, multicereali): il bimbo conosce sapori diversi.", store: "Meglio prepararla al momento." },
     { bowl: "#F2DC8C", tex: "smooth", top: ["oil"], plate: [["stick", "#7BA84E", 2]] },
     [["Metti il brodo nel boccale e scaldalo.", "4 min / 90° / vel. 1"], ["Aggiungi la crema di mais e tapioca dal foro del coperchio.", "2 min / 90° / vel. 3"], ["Unisci le zucchine passate e frulla.", "15 sec / vel. 5"], ["Condisci con olio (e parmigiano).", ""]]);
-  add({ id: "semolino", t: "Semolino in brodo vegetale", e: "🥣", m: 6, cat: "pappa", min: 10, al: ["glutine"],
+  add({ id: "semolino", t: "Semolino in brodo vegetale", e: "🥣", m: 6, cat: "pappa", min: 10, al: ["glutine", "latte"],
     ing: ["200 ml di brodo vegetale", "2 cucchiai di semolino di grano duro", "2 cucchiai di verdure del brodo passate", OIL, "1 cucchiaino di parmigiano"],
     steps: ["Porta il brodo a bollore.", "Versa il semolino a pioggia mescolando con la frusta.", "Cuoci 3-4 minuti, sempre mescolando.", "Aggiungi le verdure passate, l'olio e il parmigiano."],
     pappa: "Un classico per introdurre il glutine: liscio e caldo.", pezzi: "Accanto, verdure del brodo a bastoncini.",
@@ -191,7 +191,7 @@
     plate: [["finger", "#E1CCA9", 3], ["wedge", "#DDE8B8", 2]],
     bb: [["Metti 500 g d'acqua nel boccale; nel cestello coniglio a pezzetti, finocchio e patata. Cuoci a vapore.", "25 min / Varoma / vel. 1"], ["Controlla gli ossicini. Svuota il boccale tenendo 200 g di liquido e frulla tutto con un po' di liquido.", "1 min / vel. 5-10 progressivamente"], ["Aggiungi il liquido e la crema di riso.", "2 min / 90° / vel. 3"]] });
   meal("pappa-tacchino-zucca", "Pappa con tacchino e zucca", "🦃", { col: "#F0B866", s: ["autunno", "inverno"],
-    ing: ["25 g di fesa di tacchino", "80 g di zucca", "180 ml di brodo vegetale", "2 cucchiai di crema multicereali", OIL],
+    ing: ["25 g di fesa di tacchino", "80 g di zucca", "180 ml di brodo vegetale", "2 cucchiai di crema di riso o di mais e tapioca", OIL],
     steps: ["Cuoci tacchino e zucca a cubetti nel brodo per 15 minuti.", "Frulla il tacchino con un po' di brodo e la zucca.", "Prepara la crema di cereali nel brodo, unisci e condisci con l'olio."],
     pezzi: "Polpettine di tacchino e zucca (vedi «Polpette morbide di manzo»: stesso procedimento).", tip: "La zucca addolcisce: utile con le carni che il bimbo accetta meno.",
     plate: [["finger", "#E9D3B4", 2], ["wedge", "#E8892E", 2]] });
@@ -224,7 +224,7 @@
     plate: [["toast", "#E2BE7E", 3]],
     bb: [["Metti nel boccale la carota a pezzi e il brodo. Cuoci.", "12 min / 100° / vel. 1"], ["Aggiungi i ceci e frulla finissimo.", "1 min / vel. 5-10 progressivamente"], ["Aggiungi la crema di riso.", "2 min / 90° / vel. 3"], ["Condisci con l'olio.", ""]] });
   meal("pappa-cannellini", "Crema di fagioli cannellini e zucchine", "🤍", { m: 7, col: "#EDE3C8", tex: "smooth",
-    ing: ["3 cucchiai di cannellini cotti (senza sale)", "½ zucchina", "200 ml di brodo vegetale", "2 cucchiai di crema multicereali", OIL, "Una fogliolina di salvia (facoltativa)"],
+    ing: ["3 cucchiai di cannellini cotti (senza sale)", "½ zucchina", "200 ml di brodo vegetale", "2 cucchiai di crema di riso o di mais e tapioca", OIL, "Una fogliolina di salvia (facoltativa)"],
     steps: ["Cuoci la zucchina (e la salvia) nel brodo per 8 minuti; aggiungi i fagioli.", "Togli la salvia, frulla e passa al colino.", "Unisci la crema di cereali e condisci."],
     pezzi: "Fagioli schiacciati con la forchetta su pane morbido.", tip: "I fagioli in barattolo vanno bene: scegli quelli senza sale aggiunto e sciacquali.",
     plate: [["toast", "#EDE3C8", 3]] });
@@ -303,12 +303,12 @@
     steps: ["Sbatti l'uovo con le verdure.", "Cuoci in padella antiaderente a fuoco basso, con il coperchio, finché è ben rappresa.", "Arrotolala e tagliala a girelle o a strisce."],
     pappa: "Sbriciolata nella crema di verdure.", pezzi: "Strisce o girelle: morbide e facili da tenere.",
     tip: "L'uovo deve essere cotto completamente, senza parti liquide.", plate: [["strip", "#F4CB4F", 3, "#4F8A3A"]] });
-  piece("pancake-avena", "Pancake di avena e mela", "🥞", { m: 8, cat: "colazione", min: 15, al: ["uovo"],
+  piece("pancake-avena", "Pancake di avena e mela", "🥞", { m: 8, cat: "colazione", min: 15, al: ["uovo", "glutine"],
     ing: ["4 cucchiai di fiocchi d'avena frullati", "1 uovo", "½ mela grattugiata", "2-3 cucchiai di latte materno, formula o acqua"],
     steps: ["Mescola tutti gli ingredienti e lascia riposare 5 minuti.", "Cuoci piccole cucchiaiate in padella antiaderente appena unta, 2-3 minuti per lato.", "Controlla che siano cotti al centro."],
     pappa: "Sbriciolati nello yogurt.", pezzi: "Tagliati a strisce.",
     tip: "Senza zucchero: la mela basta a renderli dolci.", plate: [["disc", "#E2B57A", 3]] });
-  piece("muffin-banana", "Muffin di banana e avena (senza zucchero)", "🧁", { m: 9, cat: "merenda", min: 30, al: ["uovo"],
+  piece("muffin-banana", "Muffin di banana e avena (senza zucchero)", "🧁", { m: 9, cat: "merenda", min: 30, al: ["uovo", "glutine"],
     ing: ["2 banane mature", "1 uovo", "120 g di fiocchi d'avena frullati", "1 cucchiaino di lievito per dolci", "1 cucchiaio di olio di semi o extravergine"],
     steps: ["Schiaccia le banane e mescola con uovo e olio.", "Aggiungi avena e lievito.", "Versa in pirottini per mini muffin e cuoci a 180 °C per 18-20 minuti."],
     pappa: "Sbriciolato nel latte o nello yogurt.", pezzi: "Interi o a metà: morbidi e soffici.",

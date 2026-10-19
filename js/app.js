@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "5.2.1";
+  const VERSION = "5.3.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -654,7 +654,8 @@
     const tip = pick(tipsForAge(m), 0);
     const recPool = recipesForAge(m);
     const seasonal = recPool.filter(r => !r.seasons.length || r.seasons.includes(season()));
-    const rec = pick(seasonal.length ? seasonal : recPool, 3);
+    const kn = knownBy(iso(today0()), "pranzo"), fits = seasonal.filter(r => recipeFit(r, kn).fit !== "no");
+    const rec = pick(fits.length ? fits : seasonal.length ? seasonal : recPool, 3);
     const act = pick(activitiesForAge(m), 7);
     if (homeOf()) loadFeed(false);
     // In "Oggi" mostra prima le novità: salta le rassegne lunghe già iniziate
@@ -1622,60 +1623,178 @@
   // Nel fine settimana si pianifica la settimana che arriva
   const weekStart = () => (ui.wStart ? parseISO(ui.wStart) : addDays(mondayOf(today0()), [0, 6].includes(today0().getDay()) ? 7 : 0));
   const recipeById = id => RECIPES.find(r => r.id === id);
+  const foodById = id => FOODS.find(f => f.id === id) || {};
+  const NEW_EVERY = 3;   // un cibo nuovo ogni 3 giorni, sempre a pranzo: se c'è una reazione si capisce da cosa
+  const FIRST_FOODS = ["zucchina", "carota", "patata", "zucca", "finocchio", "riso", "mais", "tapioca"];   // dolci e digeribili: le prime da proporre
+
+  // Cibi di una ricetta. Per ogni ingrediente (esclusi i facoltativi) si sceglie l'alternativa
+  // («tacchino o pollo», «crema di riso o di pastina») con meno cibi ancora da provare.
+  function recipeNeeds(r, known) {
+    const use = new Set();
+    r.ing.filter(i => !/facoltativ/i.test(i)).forEach(line => {
+      // le alternative senza cibi («zucca (delica o mantovana)», «acqua o brodo») non tolgono il cibo dalla riga
+      const alts = normTxt(line).replace(/\((o|oppure) /g, " o ").replace(/[()]/g, " ").split(/\s(?:o|oppure)\s/)
+        .map(alt => FOODS.filter(f => FOOD_KEYS[f.id] && FOOD_KEYS[f.id].test(alt)).map(f => f.id)).filter(ids => ids.length);
+      let best = null;
+      alts.forEach(ids => {
+        const miss = ids.filter(id => !known.has(id)).length;
+        if (!best || miss < best.miss || (miss === best.miss && ids.length < best.ids.length)) best = { ids, miss };
+      });
+      if (best) best.ids.forEach(id => use.add(id));
+    });
+    const ids = [...use];
+    return { ids, fresh: ids.filter(id => !known.has(id)), al: [...new Set(r.al.concat(ids.map(id => foodById(id).al).filter(Boolean)))] };
+  }
+  // Allergene introdotto e senza reazioni
+  const alOk = a => allergenIntroduced(a) && !FOODS.some(f => f.al === a && foods[f.id] && foods[f.id].r === "reaz");
+  // Si può proporre? «ok»: solo cibi già provati; «nuovo»: un solo cibo nuovo, non un allergene nuovo; «no»: con il motivo
+  function recipeFit(r, known) {
+    const n = recipeNeeds(r, known);
+    const reac = n.ids.filter(id => foods[id] && foods[id].r === "reaz");
+    if (reac.length) return Object.assign(n, { fit: "no", why: "ha avuto una reazione: " + reac.map(foodName).join(", ").toLowerCase() });
+    const alNo = n.al.filter(a => !alOk(a));
+    if (alNo.length) return Object.assign(n, { fit: "no", why: "allergene non ancora introdotto: " + alNo.map(a => (ALLERGENS[a] || { n: a }).n.toLowerCase()).join(", ") });
+    if (!n.fresh.length) return Object.assign(n, { fit: "ok", why: "cibi già provati" });
+    if (n.fresh.length === 1) return Object.assign(n, { fit: "nuovo", why: "cibo nuovo: " + foodName(n.fresh[0]).toLowerCase() });
+    return Object.assign(n, { fit: "no", why: n.fresh.length + " cibi nuovi insieme: " + n.fresh.map(foodName).join(", ").toLowerCase() });
+  }
+  // Cibi che avrà già assaggiato il giorno d (e al pasto m): quelli del diario più quelli delle pappe in programma prima
+  function knownBy(d, m) {
+    const k = new Set(Object.keys(foods).filter(id => foods[id])), t = iso(today0());
+    Object.keys(plan).filter(x => x >= t && x <= d).sort().forEach(x => MEALS.forEach(([mm]) => {
+      if (x === d && (m !== "cena" || mm !== "pranzo")) return;
+      const r = plan[x] && plan[x][mm] && recipeById(plan[x][mm]);
+      if (r) recipeNeeds(r, k).ids.forEach(id => k.add(id));
+    }));
+    return k;
+  }
+  // Pappe al giorno: quelle scelte da voi, altrimenti solo il pranzo fino ai 7 mesi
+  const mealsOn = d => settings.meals || ((ageAt(d) || { m: 6 }).m >= 7 ? 2 : 1);
+  // Primo giorno delle proposte: oggi, oppure i 6 mesi se non ha ancora assaggiato niente
+  function planFrom() {
+    const t = iso(today0());
+    if (Object.keys(foods).some(id => foods[id]) || !settings.birth) return t;
+    const six = iso(addMonths(parseISO(settings.birth), 6));
+    return six > t ? six : t;
+  }
+  const hashNum = s => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
+
   function viewWeek() {
     const start = weekStart(), days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     const t = iso(today0()), end = addDays(start, 6);
     const planned = days.reduce((n, d) => n + MEALS.filter(([k]) => (plan[iso(d)] || {})[k]).length, 0);
+    const auto = days.some(d => (plan[iso(d)] || {}).auto);
+    const tried = Object.keys(foods).filter(id => foods[id]).length, alIn = KEY_ALLERGENS.filter(alOk).length;
+    const meals = settings.meals || 0, from = planFrom();
     return `
       <div class="cal-head">
         <button class="rd-btn" data-act="week-move" data-d="-7" aria-label="Settimana prima">‹</button>
         <h2>${fmt(start, { day: "numeric", month: "short" })} – ${fmt(end, { day: "numeric", month: "short" })}</h2>
         <button class="rd-btn" data-act="week-move" data-d="7" aria-label="Settimana dopo">›</button>
       </div>
-      <div class="btn-row" style="margin:0 0 12px"><button class="btn small" data-act="plan-auto">✨ Proponi la settimana</button>
+      <div class="small muted">Pappe al giorno</div>
+      <div class="segmented wk-meals">${[[0, "Secondo l'età"], [1, "Solo pranzo"], [2, "Pranzo e cena"]].map(([v, l]) => `<button class="${meals === v ? "on" : ""}" data-act="set-meals" data-v="${v}">${l}</button>`).join("")}</div>
+      ${from > iso(end) ? `<div class="card wk-info" style="margin:0 0 12px"><p class="small" style="margin:0">🥄 Le pappe partono intorno ai 6 mesi: per ${name()} dal <b>${fmt(parseISO(from), { weekday: "long", day: "numeric", month: "long" })}</b>. «Proponi» prepara la prima settimana, un cibo nuovo alla volta.</p></div>` : ""}
+      <div class="btn-row" style="margin:0 0 12px"><button class="btn small" data-act="plan-auto">✨ ${auto ? "Proponi di nuovo" : "Proponi la settimana"}</button>
         ${planned ? `<button class="btn ghost small" data-act="shop-add-plan">🛒 Ingredienti nella spesa</button><button class="btn ghost small" data-act="plan-clear">Svuota</button>` : ""}</div>
       ${days.map(d => {
         const k = iso(d), p = plan[k] || {};
         return `<div class="wk-day${k === t ? " today" : ""}${k < t ? " past" : ""}"><div class="wk-d"><b>${fmt(d, { weekday: "short" })}</b><small>${d.getDate()}</small></div>
           <div class="wk-slots">${MEALS.map(([m, l]) => {
             const r = p[m] && recipeById(p[m]);
-            return `<button class="wk-slot${r ? " full" : ""}" data-act="plan-slot" data-d="${k}" data-m="${m}">${r ? `<span class="wk-e">${r.e}</span><span class="grow"><small>${l}</small><b>${esc(r.t)}</b></span>` : `<span class="grow"><small>${l}</small><span class="muted">＋ Scegli</span></span>`}</button>`;
+            const f = r && k >= t ? recipeFit(r, knownBy(k, m)) : null;
+            const note = f && f.fit === "nuovo" ? `<em class="wk-new">✨ ${esc(foodName(f.fresh[0]))}</em>` : f && f.fit === "no" ? `<em class="wk-warn">⚠️ ${esc(f.why)}</em>` : "";
+            const milk = !r && (k < from || (m === "cena" && mealsOn(k) < 2));
+            return `<button class="wk-slot${r ? " full" : ""}${milk ? " milk" : ""}" data-act="plan-slot" data-d="${k}" data-m="${m}">${r ? `<span class="wk-e">${r.e}</span><span class="grow"><small>${l}</small><b>${esc(r.t)}</b>${note}</span>` : `<span class="grow"><small>${l}</small><span class="muted">${milk ? "🍼 Latte" : "＋ Scegli"}</span></span>`}</button>`;
           }).join("")}</div></div>`;
       }).join("")}
-      <p class="small muted">Le proposte tengono conto dell'età di ${name()}, della stagione e dei cibi non ancora provati. La pappa la sceglie lui: segui il suo appetito.</p>`;
+      <div class="card wk-info"><p class="small" style="margin:0">Le proposte usano solo i <b>cibi già provati (${tried})</b> e gli <b>allergeni già introdotti (${alIn} di ${KEY_ALLERGENS.length})</b>. Un cibo nuovo alla volta, a pranzo, ogni ${NEW_EVERY} giorni (✨): se c'è una reazione si capisce subito da cosa.</p>
+        <p class="small muted" style="margin:8px 0 0">I cibi provati si aggiornano da soli quando segni la pappa nel <a href="#/diario">diario</a>; gli allergeni si introducono uno alla volta dal <a href="#/allergeni">percorso allergeni</a>. La pappa la sceglie ${name()}: segui il suo appetito.</p></div>`;
   }
   function openPlanSlot(d, m) {
-    const cur = (plan[d] || {})[m], age0 = ageM(), list = recipesForAge(age0).slice().sort((a, b) => (b.seasons.includes(season()) ? 1 : 0) - (a.seasons.includes(season()) ? 1 : 0));
+    const cur = (plan[d] || {})[m], known = knownBy(d, m), s0 = season(parseISO(d));
+    const rank = { ok: 0, nuovo: 1, no: 2 };
+    const list = recipesForAge((ageAt(d) || { m: 6 }).m).filter(r => r.id !== "brodo-vegetale").map(r => ({ r, f: recipeFit(r, known) }))
+      .sort((a, b) => rank[a.f.fit] - rank[b.f.fit] || (b.r.seasons.includes(s0) ? 1 : 0) - (a.r.seasons.includes(s0) ? 1 : 0));
+    const head = { ok: "✅ Con i cibi già provati", nuovo: "✨ Con un cibo nuovo", no: "⚠️ Non ancora: contengono cibi o allergeni da introdurre" };
+    let last = "";
     openSheet(`<h2>${MEALS.find(x => x[0] === m)[1]} · ${fmt(parseISO(d), { weekday: "long", day: "numeric", month: "long" })}</h2>
       <input class="search" type="search" id="wkQ" placeholder="Cerca una ricetta" autocomplete="off">
       <div class="card" style="padding:0;overflow:hidden" id="wkList">
         ${cur ? `<button class="food" data-act="plan-set" data-d="${d}" data-m="${m}" data-id=""><span class="st">✕</span><span class="grow">Lascia libero</span></button>` : ""}
-        ${list.map(r => `<button class="food" data-act="plan-set" data-d="${d}" data-m="${m}" data-id="${r.id}" data-n="${esc(normTxt(r.t + " " + r.ing.join(" ")))}"><span class="st">${r.e}</span><span class="grow">${esc(r.t)}<br><span class="small muted">dai ${r.m} mesi · ${r.min} min${r.al.length ? " · contiene allergeni" : ""}</span></span>${r.id === cur ? "✅" : ""}</button>`).join("")}
+        ${list.map(({ r, f }) => (f.fit !== last ? `<div class="wk-sep" data-sep="${(last = f.fit)}">${head[f.fit]}</div>` : "") +
+          `<button class="food" data-act="plan-set" data-d="${d}" data-m="${m}" data-id="${r.id}" data-n="${esc(normTxt(r.t + " " + r.ing.join(" ")))}"><span class="st">${r.e}</span><span class="grow">${esc(r.t)}<br><span class="small muted">dai ${r.m} mesi · ${r.min} min${f.fit !== "ok" ? " · " + esc(f.why) : ""}</span></span>${r.id === cur ? "✅" : ""}</button>`).join("")}
       </div><button class="btn ghost block" data-act="close" style="margin-top:10px">Chiudi</button>`);
     const q = sheet.querySelector("#wkQ");
-    q.addEventListener("input", () => { const v = normTxt(q.value); sheet.querySelectorAll("#wkList [data-n]").forEach(b => { b.hidden = v && !b.dataset.n.includes(v); }); });
+    q.addEventListener("input", () => {
+      const v = normTxt(q.value);
+      sheet.querySelectorAll("#wkList [data-n]").forEach(b => { b.hidden = v && !b.dataset.n.includes(v); });
+      sheet.querySelectorAll("#wkList [data-sep]").forEach(s => { s.hidden = !!v; });
+    });
   }
+  // Una pappa scelta a mano non viene più cambiata da «Proponi di nuovo»
   function setPlan(d, m, id) {
-    plan[d] = Object.assign({ pranzo: null, cena: null }, plan[d] || {}, { [m]: id || null });
+    const p = Object.assign({ pranzo: null, cena: null }, plan[d] || {}, { [m]: id || null });
+    if (p.auto) { p.auto = Object.assign({}, p.auto); delete p.auto[m]; if (!Object.keys(p.auto).length) delete p.auto; }
+    plan[d] = p;
     S.set("plan", plan);
   }
-  // Proposta: ricette adatte e di stagione, senza ripetizioni ravvicinate; sotto i 7 mesi solo il pranzo
+  // Proposta della settimana: rifà solo le proposte automatiche da oggi in poi, lasciando le pappe scelte da voi.
+  // Usa i cibi già provati e gli allergeni già introdotti; un solo cibo nuovo a pranzo ogni NEW_EVERY giorni;
+  // varia le ricette, preferisce quelle di stagione e ripropone 1-2 volte a settimana gli allergeni già introdotti.
   function autoPlan() {
-    const start = weekStart(), age0 = ageM(), s0 = season();
-    const pool = recipesForAge(age0).filter(r => ["pappa", "base", "famiglia", "pezzi"].includes(r.cat) && r.id !== "brodo-vegetale" && (!r.seasons.length || r.seasons.includes(s0)));
-    if (!pool.length) return 0;
-    const newFirst = pool.slice().sort((a, b) => (a.ing.some(i => FOODS.some(f => !foods[f.id] && normTxt(i).includes(normTxt(f.n)))) ? -1 : 0) - (b.ing.some(i => FOODS.some(f => !foods[f.id] && normTxt(i).includes(normTxt(f.n)))) ? -1 : 0));
-    let n = 0, i = (Math.floor(today0() / 864e5) * 3) % newFirst.length;
-    for (let k = 0; k < 7; k++) {
-      const d = iso(addDays(start, k));
-      if (d < iso(today0())) continue;
+    const from = planFrom();
+    let start = weekStart(), moved = false;
+    if (iso(addDays(start, 6)) < from) { start = mondayOf(parseISO(from)); ui.wStart = iso(start); moved = true; }
+    const days = Array.from({ length: 7 }, (_, i) => iso(addDays(start, i))).filter(d => d >= from);
+    const seed = String((ui.planSeed = (ui.planSeed || 0) + 1));
+    days.forEach(d => {
+      const p = plan[d];
+      if (p && p.auto) { const q = Object.assign({}, p); Object.keys(p.auto).forEach(m => { q[m] = null; }); delete q.auto; plan[d] = q; }
+    });
+    const known = knownBy(days[0] || from, "pranzo");
+    let lastNew = Object.keys(foods).filter(id => foods[id] && foods[id].date).map(id => foods[id].date).sort().pop() || null;
+    const used = {}, alWeek = {}, recent = [], fresh = [];
+    let n = 0, empty = 0;
+    days.forEach(d => {
+      const age0 = (ageAt(d) || { m: 6 }).m, s0 = season(parseISO(d));
+      const pool = recipesForAge(age0).filter(r => ["pappa", "base", "famiglia", "pezzi"].includes(r.cat) && r.id !== "brodo-vegetale");
+      const want = mealsOn(d) === 2 ? ["pranzo", "cena"] : ["pranzo"];
+      const p = plan[d] = Object.assign({ pranzo: null, cena: null }, plan[d] || {});
       MEALS.forEach(([m]) => {
-        if (m === "cena" && age0 < 7) return;
-        if ((plan[d] || {})[m]) return;
-        setPlan(d, m, newFirst[i % newFirst.length].id); i++; n++;
+        const mine = p[m] && recipeById(p[m]);
+        if (mine) { recipeNeeds(mine, known).ids.forEach(id => known.add(id)); used[mine.id] = (used[mine.id] || 0) + 1; recent.push(mine.id); return; }
+        if (!want.includes(m)) return;
+        const canNew = m === "pranzo" && (!lastNew || daysBetween(parseISO(lastNew), parseISO(d)) >= NEW_EVERY);
+        let best = null;
+        pool.forEach(r => {
+          const f = recipeFit(r, known);
+          if (f.fit === "no" || (f.fit === "nuovo" && !canNew)) return;
+          let sc = hashNum(seed + d + m + r.id) * 2;
+          if (f.fit === "nuovo") {
+            // nei giorni del cibo nuovo, meglio una pappa semplice con il nuovo cibo ben riconoscibile
+            const cat = foodById(f.fresh[0]).cat;
+            sc += 10 - f.ids.length + (cat === "verdura" ? 2 : cat === "cereali" ? 1 : cat === "proteine" && known.size >= 4 ? 1.5 : 0);
+            if (known.size < 8 && FIRST_FOODS.includes(f.fresh[0])) sc += 3;
+          }
+          if (r.seasons.length) sc += r.seasons.includes(s0) ? 2 : -6;
+          sc -= 4 * (used[r.id] || 0);
+          if (recent.slice(-2).includes(r.id)) sc -= 6;
+          f.al.forEach(a => { sc += !alWeek[a] ? 2 : alWeek[a] >= 2 ? -2 : 0; });
+          if (age0 >= 8 && ["pezzi", "famiglia"].includes(r.cat)) sc += 1;
+          if (!best || sc > best.sc) best = { r, f, sc };
+        });
+        if (!best) { empty++; return; }
+        p[m] = best.r.id;
+        p.auto = Object.assign({}, p.auto || {}, { [m]: 1 });
+        best.f.ids.forEach(id => known.add(id));
+        if (best.f.fit === "nuovo") { lastNew = d; fresh.push([d, best.f.fresh[0]]); }
+        best.f.al.forEach(a => { alWeek[a] = (alWeek[a] || 0) + 1; });
+        used[best.r.id] = (used[best.r.id] || 0) + 1; recent.push(best.r.id); n++;
       });
-    }
-    return n;
+    });
+    S.set("plan", plan);
+    return { n, empty, fresh, moved, from };
   }
   // Lista della spesa condivisa con la famiglia
   const shopAll = () => (shop || []).filter(x => x && !x.del);
@@ -3181,7 +3300,19 @@
       case "week-move": ui.wStart = iso(addDays(weekStart(), Number(t.dataset.d))); render(true); break;
       case "plan-slot": openPlanSlot(t.dataset.d, t.dataset.m); break;
       case "plan-set": setPlan(t.dataset.d, t.dataset.m, t.dataset.id); closeSheet(); render(true); break;
-      case "plan-auto": { const n = autoPlan(); toast(n ? "Proposte " + plural(n, "pappa", "pappe") + " ✨ Toccane una per cambiarla" : "La settimana è già piena"); render(true); break; }
+      case "plan-auto": {
+        const res = autoPlan();
+        const fr = res.fresh.length ? " · " + (res.fresh.length === 1 ? "1 cibo nuovo, segnato" : res.fresh.length + " cibi nuovi, segnati") + " con ✨" : "";
+        toast(res.n ? (res.moved ? "Le pappe partono " + fmt(parseISO(res.from), { weekday: "long", day: "numeric", month: "long" }) + ", ai 6 mesi. " : "") + "Proposte " + plural(res.n, "pappa", "pappe") + " ✨" + fr
+          : res.empty ? "Nessuna ricetta adatta ai cibi provati: segna nel diario i cibi che ha già assaggiato" : "La settimana è già piena: tocca una pappa per cambiarla");
+        render(true); break;
+      }
+      case "set-meals": {
+        settings.meals = Number(t.dataset.v) || undefined; S.set("settings", settings);
+        const st = weekStart();
+        if (Array.from({ length: 7 }, (_, i) => plan[iso(addDays(st, i))]).some(p => p && p.auto)) autoPlan();
+        render(true); break;
+      }
       case "plan-clear": if (confirm("Svuotare il piano di questa settimana?")) { const st = weekStart(); for (let k = 0; k < 7; k++) { const d = iso(addDays(st, k)); if (plan[d]) plan[d] = { pranzo: null, cena: null }; } S.set("plan", plan); render(true); } break;
       case "plan-recipe": {
         const r = recipeById(t.dataset.id), days = Array.from({ length: 7 }, (_, i) => addDays(today0(), i));

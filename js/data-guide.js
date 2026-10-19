@@ -250,6 +250,26 @@ window.FOODS = [
   ["molluschi", "Calamari / cozze", "allergeni", "molluschi"]
 ].map(([id, n, cat, al]) => ({ id, n, cat, al: al || null }));
 
+/* Come riconoscere ogni cibo negli ingredienti delle ricette (testo in minuscolo e senza accenti).
+   Serve alla proposta della settimana: solo pappe con cibi già provati e allergeni già introdotti. */
+window.FOOD_KEYS = {
+  carota: /carot/, zucca: /\bzucc(a|he)\b/, patata: /\bpatat(a|e|ine)\b(?! dolc)/, "patata-dolce": /patat(a|e) dolc|batat/,
+  zucchina: /zucchin/, finocchio: /finocch/, broccolo: /broccol/, cavolfiore: /cavolfior/, fagiolini: /fagiolin/, piselli: /pisell/,
+  porro: /\bporr[oi]\b/, spinaci: /spinac/, bietola: /\bbietol|\bbiete\b|erbette/, pomodoro: /pomodor|passata/, melanzana: /melanzan/,
+  peperone: /peperon/, asparagi: /asparag/, verza: /\bverza\b|\bcavol[oi]\b/, carciofo: /carciof/, barbabietola: /barbabietol/, sedano: /\bsedano\b/,
+  mela: /\bmel[ae]\b/, pera: /\bper[ae]\b/, banana: /banan/, cachi: /\bcach[ie]\b|\bkaki\b/, avocado: /avocado/, pesca: /\bpesc(a|he)\b/,
+  albicocca: /albicocc/, prugna: /prugn/, kiwi: /\bkiwi\b/, agrumi: /aranc|mandarin|clementin/, fragole: /fragol/, mirtilli: /mirtill/,
+  uva: /\buva\b/, melone: /\bmelone\b/, anguria: /anguria|cocomero/, mango: /\bmango\b/,
+  riso: /\briso\b|risott/, mais: /\bmais\b|polenta/, tapioca: /tapioca/, miglio: /\bmiglio\b/, quinoa: /quinoa/, avena: /\bavena\b/,
+  grano: /\bpast(a|ina|ine)\b|semolin|semola|cous ?cous|farina(?! di (mais|riso|ceci|avena|miglio))|stelline|ditalini|gnocch|biscott/,
+  pane: /\bpane\b|pangrattato|crostin|grissin|fette biscottate|panino/, orzo: /\borzo\b/, farro: /\bfarro\b/,
+  tacchino: /tacchin/, pollo: /\bpollo\b/, coniglio: /conigli/, manzo: /\bmanzo\b|vitell|macinat/, maiale: /maiale|lonza/, agnello: /agnell/,
+  merluzzo: /merluzz|nasell|baccala/, platessa: /platess|sogliol/, orata: /\borata\b|branzin/, salmone: /salmon/, trota: /\btrot(a|e)\b/,
+  uovo: /\buov[oa]\b|\buova\b|tuorl/, lenticchie: /lenticch/, ceci: /\bceci\b/, fagioli: /\bfagiol[oi]\b|cannellin|borlott/, tofu: /\btofu\b/,
+  yogurt: /yogurt/, ricotta: /ricotta/, parmigiano: /parmigian|\bgrana\b/, mozzarella: /mozzarell/, burro: /\bburro\b(?! di)/,
+  arachidi: /arachid/, "frutta-guscio": /mandorl|nocciol|\bnoci\b/, sesamo: /sesamo|tahin/, crostacei: /gamber/, molluschi: /calamar|cozz|vongol/
+};
+
 /* Allergeni principali da tenere sotto controllo nel diario */
 window.KEY_ALLERGENS = ["latte", "uovo", "glutine", "pesce", "arachidi", "frutta-guscio", "sesamo", "soia"];
 
