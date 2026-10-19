@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "5.2.0";
+  const VERSION = "5.2.1";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -248,6 +248,8 @@
     document.body.classList.toggle("immersive", r.view === "ricetta" && settings != null);
     const mc = app.querySelector("#monthChips"), mon = mc && mc.querySelector(".on");
     if (mon) mc.scrollLeft = mon.offsetLeft - mc.clientWidth / 2 + mon.offsetWidth / 2;
+    const hn = app.querySelector(".hubnav"), hon = hn && hn.querySelector(".on");
+    if (hon && hon.offsetLeft + hon.offsetWidth > hn.clientWidth - 16) hn.scrollLeft = hon.offsetLeft - hn.clientWidth / 2 + hon.offsetWidth / 2;
     const tab = TAB_OF[r.view] || r.view;
     document.querySelectorAll(".tabbar a").forEach(a => a.classList.toggle("on", settings != null && a.dataset.tab === tab));
     document.querySelector(".tabbar").hidden = !settings;
@@ -812,7 +814,7 @@
         ${list.length ? tileGrid(list) : `<div class="empty"><b>🥣</b>Nessuna ricetta con questi filtri.</div>`}`;
     }
     return `
-      <input class="search" type="search" placeholder="Cerca per nome o ingrediente (es. zucca)" value="${esc(ui.rQ)}" data-input="rQ" aria-label="Cerca ricette">
+      <input class="search" type="search" placeholder="Cerca ricetta o ingrediente" value="${esc(ui.rQ)}" data-input="rQ" aria-label="Cerca ricette">
       <div class="chips">
         ${chip("rAge", "ora", m < 6 ? "Per iniziare" : "Adatte ora")}${chip("rAge", "6", "6 mesi")}${chip("rAge", "7-8", "7-8 mesi")}${chip("rAge", "9", "9+ mesi")}${chip("rAge", "tutte", "Tutte le età")}
       </div>
@@ -1182,17 +1184,17 @@
   function sleepLiveCard() {
     const x = sleeping();
     if (!x) return "";
-    return `<div class="card lg-live"><span class="lg-ic lc-purple">😴</span><div class="grow"><b>${name()} sta dormendo</b><div class="small muted">dalle ${esc(x.time)}${x.date !== iso(today0()) ? " di ieri" : ""} · ${durTxt(sleepMin(x))}</div></div>
+    return `<div class="card lg-live"><span class="lg-ic lc-purple">😴</span><div class="grow"><b>${name()} sta dormendo</b><div class="small muted"><span class="nw">dalle ${esc(x.time)}${x.date !== iso(today0()) ? " di ieri" : ""}</span> · <span class="nw">${durTxt(sleepMin(x))}</span></div></div>
       <button class="btn small" data-act="sleep-stop" data-id="${esc(x.id)}">Si è svegliato</button></div>`;
   }
   // In «Oggi»: aggiunta rapida al diario e riepilogo della giornata
   function todayDiaryCard() {
     const d = iso(today0()), items = dayItems(d), s = daySummary(d);
-    const q = [["pasto", "Pappa"], ["latte", "Latte"], sleeping() ? null : ["sonno", "Nanna"], ["pannolino", "Pannolino"], ["foto", "Foto"], ["misure", "Peso"]].filter(Boolean);
+    const q = [["pasto", "Pappa"], ["latte", "Latte"], ["sonno", "Nanna"], ["pannolino", "Pannolino"], ["foto", "Foto"], ["misure", "Peso"], ["salute", "Salute"]], zz = sleeping();
     return `<div class="card lg-today">
       <div class="section-title" style="margin:0 0 8px"><h2>Il diario di oggi</h2><a href="#/diario">Calendario ›</a></div>
       <div class="lg-quick">${q.map(([k, l]) => k === "sonno"
-        ? `<button data-act="sleep-start"><span class="lg-ic lc-purple">😴</span>${l}</button>`
+        ? (zz ? `<button data-act="sleep-stop" data-id="${esc(zz.id)}"><span class="lg-ic lc-purple">☀️</span>Sveglio</button>` : `<button data-act="sleep-start"><span class="lg-ic lc-purple">😴</span>${l}</button>`)
         : `<button data-act="log-add" data-type="${k}" data-d="${d}"><span class="lg-ic lc-${LOG_TYPES[k].c}">${LOG_TYPES[k].e}</span>${l}</button>`).join("")}
         <a href="#/diario" class="lg-more"><span class="lg-ic lc-gray">＋</span>Altro</a></div>
       ${summaryChips(s) ? `<div style="margin-top:10px">${summaryChips(s)}</div>` : ""}
@@ -1246,7 +1248,7 @@
         ${sel !== today ? `<button class="link-btn small" data-act="cal-day" data-d="${today}" style="margin:6px 0 0">↩︎ Torna a oggi</button>` : ""}
         <div class="lg-day">
           <h2>${sel === today ? "Oggi" : fmt(parseISO(sel), { weekday: "long", day: "numeric", month: "long" })}</h2>
-          ${a ? `<div class="small muted">${name()} aveva ${ageText(a)}</div>` : ""}
+          ${a ? `<div class="small muted">${name()} ${sel === today ? "ha" : "aveva"} ${ageText(a)}</div>` : ""}
           ${summaryChips(s) ? `<div style="margin-top:8px">${summaryChips(s)}</div>` : ""}
         </div>
         ${sel === today ? sleepLiveCard() : ""}
@@ -1689,7 +1691,7 @@
       <span class="grow">${esc(x.t)}${x.src || (x.by && raw.get("sync", null)) ? `<small>${esc([x.src, x.by && raw.get("sync", null) ? "✍️ " + x.by : ""].filter(Boolean).join(" · "))}</small>` : ""}</span>
       <button class="shop-del" data-act="shop-del" data-id="${esc(x.id)}" aria-label="Togli">✕</button></div>`;
     return `
-      <form id="shopForm" class="shop-add"><input type="text" name="t" placeholder="Aggiungi alla spesa (es. pannolini taglia 4)" autocomplete="off" required><button class="btn" type="submit">＋</button></form>
+      <form id="shopForm" class="shop-add"><input type="text" name="t" placeholder="Aggiungi (es. pannolini)" autocomplete="off" required><button class="btn" type="submit">＋</button></form>
       <div class="btn-row" style="margin:0 0 12px"><button class="btn ghost small" data-act="shop-add-plan">🗓️ Ingredienti della settimana</button>
         ${got.length ? `<button class="btn ghost small" data-act="shop-clear">Togli i presi (${got.length})</button>` : ""}</div>
       ${todo.length ? `<div class="card" style="padding:4px 0">${todo.map(row).join("")}</div>` : `<div class="empty"><b>🛒</b>La lista è vuota.${raw.get("sync", null) ? " È condivisa con la famiglia: quello che aggiungi lo vedono anche loro." : ""}</div>`}
@@ -2214,7 +2216,7 @@
       return `<label class="check"><input type="checkbox" data-act="h-toggle" data-id="${id}" ${d ? "checked" : ""}>
         <span class="grow"><span class="title">${esc(title)}</span>
         ${due ? `<span class="when">${dueM < 72 ? "Intorno al " + fmt(due, { day: "numeric", month: "long", year: "numeric" }) : "Verso i 6 anni"}</span>` : ""}
-        ${d ? `<span class="tag green">fatto · ${fmt(parseISO(d), { day: "numeric", month: "short" })}</span>` : soon ? `<span class="tag peach">in arrivo</span>` : ""}
+        ${d ? `<span class="tag green">fatto · ${fmt(parseISO(d), { day: "numeric", month: "short" })}</span>` : soon ? (daysBetween(t, due) < 0 ? `<span class="tag yellow">da segnare</span>` : `<span class="tag peach">in arrivo</span>`) : ""}
         <span class="detail">${detail}</span></span></label>`;
     };
     // Le voci scadute da più di 2 mesi e non segnate finiscono in un gruppo chiuso
@@ -2287,7 +2289,7 @@
     const body = ui.healthTab === "crescita" ? viewGrowth() : ui.healthTab === "domande" ? viewQuestions() : ui.healthTab === "cura" ? viewCare() : ui.healthTab === "promemoria" ? viewReminders() : viewAgenda() + aslCard();
     return `<a class="card list-card" href="#/emergenze" style="background:var(--danger-soft);border-color:transparent">
         <div class="big-emoji">🆘</div><div class="grow"><h3>Emergenze</h3><div class="meta">Numeri utili, soffocamento, febbre, pronto soccorso</div></div><span class="muted">›</span></a>
-      <div class="segmented">${seg("agenda", "📅 Agenda")}${seg("promemoria", "🔔 Promemoria")}${seg("crescita", "📈 Crescita")}${seg("domande", "❓ Domande")}${seg("cura", "🧴 Come si fa")}</div>${body}`;
+      <div class="segmented">${seg("agenda", "📅 Agenda")}${seg("promemoria", "🔔 Promemoria")}${seg("crescita", "📈 Crescita")}${seg("domande", "❓ Domande")}${seg("cura", "🧴 Cure")}</div>${body}`;
   }
 
   /* ---------------- Emergenze ---------------- */
