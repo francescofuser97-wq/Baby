@@ -1,6 +1,6 @@
 /* Service worker: rende l'app disponibile anche offline.
    Quando modifichi l'app, aumenta CACHE per far scaricare la nuova versione. */
-const CACHE = "piccoli-passi-v29";
+const CACHE = "piccoli-passi-v30";
 const ASSETS = [
   "./",
   "./index.html",
@@ -56,7 +56,8 @@ self.addEventListener("fetch", event => {
     caches.match(req, { ignoreSearch: true }).then(cached => {
       if (!cached) return network.catch(() => caches.match("./index.html"));
       const slow = new Promise(resolve => setTimeout(() => resolve(cached), 3000));
-      return Promise.race([network.catch(() => cached), slow]);
+      // una pagina d'errore (404, 5xx durante un aggiornamento del sito) non sostituisce la copia buona
+      return Promise.race([network.then(r => (r.ok ? r : cached), () => cached), slow]);
     })
   );
 });

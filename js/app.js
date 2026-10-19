@@ -1,12 +1,13 @@
 "use strict";
 (function () {
-  const VERSION = "5.3.0";
+  const VERSION = "5.3.1";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
   const DAY = 864e5;
 
   /* ---------------- Storage (solo su questo dispositivo) ---------------- */
+  let toastTimer;   // qui in alto: raw.set può già mostrare un avviso durante l'avvio
   const raw = {
     get(k, d) { try { const v = localStorage.getItem("pp." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) {
@@ -92,6 +93,7 @@
   const dayN = () => { const t = today0(); return Math.floor(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / DAY); };
   const pick = (arr, salt) => arr.length ? arr[(dayN() + (salt || 0)) % arr.length] : null;
   const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
+  const dayPrep = (dt, p) => ([8, 11].includes(dt.getDate()) ? { il: "l'", al: "all'", dal: "dall'" }[p] : p + " ");
   function season(d) {
     const m = (d || new Date()).getMonth();
     return m <= 1 || m === 11 ? "inverno" : m <= 4 ? "primavera" : m <= 7 ? "estate" : "autunno";
@@ -109,6 +111,7 @@
   }
   const ageM = () => { const a = age(); return a ? a.m : 6; };
   const name = () => (settings && settings.name ? esc(settings.name) : "Il tuo bimbo");
+  const ofName = () => (settings && settings.name ? esc(settings.name) : "tuo figlio");   // dopo «di», «per», «a»
   function ageText(a) {
     if (!a) return "";
     if (a.m === 0) return plural(a.d, "giorno", "giorni");
@@ -116,7 +119,6 @@
     return plural(a.m, "mese", "mesi") + (a.d ? " e " + plural(a.d, "giorno", "giorni") : "");
   }
 
-  let toastTimer;
   function toast(msg) {
     const t = document.getElementById("toast");
     t.textContent = msg; t.classList.add("show");
@@ -160,7 +162,7 @@
   let deferredPrompt = null;
   const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt = e; if (/oggi|impostazioni/.test(location.hash) || !location.hash) render(true); });
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredPrompt = e; if (settings && sheet.hidden && !editing() && (/oggi|impostazioni/.test(location.hash) || !location.hash)) render(true); });
   window.addEventListener("appinstalled", () => { deferredPrompt = null; toast("App installata! 🎉"); });
 
   function installCard(force) {
@@ -269,11 +271,13 @@
 
   function goBack() {
     const r = parseRoute();
-    if (sessionStorage.getItem("pp.nav")) history.back();
+    let nav = null;
+    try { nav = sessionStorage.getItem("pp.nav"); } catch (e) { /* memoria bloccata */ }
+    if (nav) history.back();
     else location.hash = PARENT[r.view] || "#/oggi";
   }
   document.getElementById("btnBack").addEventListener("click", goBack);
-  window.addEventListener("hashchange", () => { sessionStorage.setItem("pp.nav", "1"); closeSheet(); if (cook) closeCook(); render(false); });
+  window.addEventListener("hashchange", () => { try { sessionStorage.setItem("pp.nav", "1"); } catch (e) { /* memoria bloccata */ } closeSheet(); if (cook) closeCook(); render(false); });
   window.addEventListener("scroll", () => document.querySelector(".topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
 
   /* ---------------- Profili dei figli ---------------- */
@@ -501,6 +505,7 @@
     const mk = (d, mo) => {
       let dt = new Date(pub.getFullYear(), mo, d);
       if (dt < addDays(base, -45)) dt = new Date(pub.getFullYear() + 1, mo, d);
+      else if (dt > addDays(base, 300)) dt = new Date(pub.getFullYear() - 1, mo, d);   // «20 dicembre» letto a gennaio
       return dt;
     };
     const ok = d => d >= 1 && d <= 31;
@@ -601,11 +606,11 @@
     if (!f || f.v !== FEED_V || f.place !== h.name) { loadFeed(false); return `<div class="card small muted">📰 Cerco eventi e notizie per bambini a ${esc(h.name)}…</div>`; }
     loadFeed(false);
     const undated = (f.items || []).filter(it => !it.ev || !it.ev.start);
-    const dated = (f.items || []).length - undated.length;
+    const dated = (f.items || []).filter(it => it.ev && it.ev.start && (it.ev.end || it.ev.start) >= iso(today0())).length;
     const head = `<div class="card-kicker">📰 Altre notizie su eventi a ${esc(h.name)}</div>`;
     if (!f.items.length) return `<div class="card"><div class="card-kicker">📰 Eventi trovati in automatico</div><p class="small muted" style="margin:0">${f.ok ? "Nelle ultime settimane non ho trovato notizie su eventi per bambini a " + esc(h.name) + ". Prova le ricerche qui sotto." : "Non riesco a leggere le notizie in questo momento: controlla la connessione."}</p>
       <button class="btn ghost small" data-act="feed-reload" style="margin-top:8px">🔄 Riprova</button></div>`;
-    if (!undated.length) return `<p class="small muted">📰 ${plural(dated, "evento trovato", "eventi trovati")} in automatico nelle notizie di ${esc(h.name)}: sono in calendario qui sopra.</p>`;
+    if (!undated.length) return dated ? `<p class="small muted">📰 ${plural(dated, "evento trovato", "eventi trovati")} in automatico nelle notizie di ${esc(h.name)}: ${dated === 1 ? "è" : "sono"} in calendario qui sopra.</p>` : `<p class="small muted">📰 Per ora nelle notizie di ${esc(h.name)} non ci sono altri eventi in arrivo.</p>`;
     return `<div class="card">${head}
       ${undated.map(it => `<a class="food" href="${esc(it.l)}" target="_blank" rel="noopener"><span class="st">🗞️</span><span class="grow">${esc(it.t)}<br><span class="small muted">${esc(it.s)}${it.d ? " · " + fmt(new Date(it.d), { day: "numeric", month: "short" }) : ""}</span></span><span class="muted">›</span></a>`).join("")}
       <p class="small muted" style="margin:8px 0 0">Trovate in automatico da Google News. Senza una data nel titolo: apri l'articolo per i dettagli e, se ti interessa, aggiungilo con «➕».</p></div>`;
@@ -636,7 +641,7 @@
       .filter(i => { const d = daysBetween(t, i.due); return d <= 30 && d >= -30; }).sort((x, y) => x.due - y.due)[0];
     if (!due) return "";
     return `<a class="card tint-blue" href="#/salute"><div class="card-kicker">🩺 In arrivo</div><h3>${esc(due.t)}</h3>
-      <p class="small">Intorno al ${fmt(due.due, { day: "numeric", month: "long" })}. Prenota e segnalo nell'agenda: ${esc(due.sub)}</p></a>`;
+      <p class="small">Intorno ${dayPrep(due.due, "al")}${fmt(due.due, { day: "numeric", month: "long" })}. Prenota e segnalo nell'agenda: ${esc(due.sub)}</p></a>`;
   }
 
   function viewToday() {
@@ -648,13 +653,13 @@
     if (a) {
       const from = addMonths(a.birth, a.m), to = addMonths(a.birth, a.m + 1), left = daysBetween(today0(), to);
       const pct = Math.min(100, Math.round(daysBetween(from, today0()) / Math.max(1, daysBetween(from, to)) * 100));
-      progress = `<div class="small muted">${a.m + 1 === 6 ? "Mancano " + plural(left, "giorno", "giorni") + " ai 6 mesi: si avvicina lo svezzamento" : "Tra " + plural(left, "giorno", "giorni") + " compie " + plural(a.m + 1, "mese", "mesi")} · ${fmt(to)}</div>
+      progress = `<div class="small muted">${a.m + 1 === 6 ? (left === 1 ? "Manca " : "Mancano ") + plural(left, "giorno", "giorni") + " ai 6 mesi: si avvicina lo svezzamento" : "Tra " + plural(left, "giorno", "giorni") + " compie " + ageText({ m: a.m + 1, d: 0 })} · ${fmt(to)}</div>
         <div class="progress" aria-hidden="true"><i style="width:${pct}%"></i></div>`;
     }
     const tip = pick(tipsForAge(m), 0);
     const recPool = recipesForAge(m);
     const seasonal = recPool.filter(r => !r.seasons.length || r.seasons.includes(season()));
-    const kn = knownBy(iso(today0()), "pranzo"), fits = seasonal.filter(r => recipeFit(r, kn).fit !== "no");
+    const weaning = m < 24, kn = weaning ? knownBy(iso(today0()), "pranzo") : null, fits = weaning ? seasonal.filter(r => recipeFit(r, kn).fit !== "no") : seasonal;
     const rec = pick(fits.length ? fits : seasonal.length ? seasonal : recPool, 3);
     const act = pick(activitiesForAge(m), 7);
     if (homeOf()) loadFeed(false);
@@ -681,7 +686,7 @@
         ${a.m <= 24 ? `<span class="mh-badge"><b>${a.m}</b><small>${a.m === 1 ? "mese" : "mesi"}</small></span>` : ""}
         <span class="mh-body">
           <b class="mh-age">${name()} ha ${ageText(a)}</b>
-          <span class="small muted">${plural(a.w, "settimana", "settimane")} · ${settings.sex === "f" ? "nata" : "nato"} il ${fmt(a.birth, { day: "numeric", month: "long", year: "numeric" })}</span>
+          <span class="small muted">${plural(a.w, "settimana", "settimane")} · ${settings.sex === "f" ? "nata" : "nato"} ${dayPrep(a.birth, "il")}${fmt(a.birth, { day: "numeric", month: "long", year: "numeric" })}</span>
           ${progress}
           <span class="mh-foot"><span>${a.m <= 24 ? "📆 Il tuo aggiornamento del mese" : "📆 Mese per mese"}</span><span class="mh-open">Apri <i>▶</i></span></span>
         </span>
@@ -691,7 +696,7 @@
       ${todayDiaryCard()}
       ${remTodayCard()}
       ${healthTodayCard()}
-      ${allergenTodayCard()}
+      ${weaning ? allergenTodayCard() : ""}
       ${readiness}
 
       <a class="card tint-green" href="${ph.link}">
@@ -707,8 +712,7 @@
       <div class="section-title"><h2>${m < 6 ? "Ricetta da provare presto" : "Ricetta del giorno"}</h2><a href="#/ricette">Tutte ›</a></div>
       ${rec ? recipeCard(rec) : ""}
 
-      <div class="section-title"><h2>Gioco del giorno</h2><a href="#/giochi">Tutti ›</a></div>
-      ${act ? activityCard(act) : ""}
+      ${act ? `<div class="section-title"><h2>Gioco del giorno</h2><a href="#/giochi">Tutti ›</a></div>${activityCard(act)}` : ""}
 
       <div class="section-title"><h2>Prossimi eventi</h2><a href="#/eventi">Tutti ›</a></div>
       ${evs.length ? evs.map(eventMini).join("") : `<div class="card muted small">Nessun evento in calendario: dai un'occhiata ai <a href="#/eventi">luoghi e servizi</a>.</div>`}
@@ -783,7 +787,7 @@
     else if (ui.rAge === "6") list = list.filter(r => r.m <= 6);
     else if (ui.rAge === "7-8") list = list.filter(r => r.m >= 7 && r.m <= 8);
     else if (ui.rAge === "9") list = list.filter(r => r.m >= 9);
-    if (ui.rCat !== "tutte") list = list.filter(r => r.cat === ui.rCat);
+    if (ui.rCat !== "tutte") list = list.filter(r => String(ui.rCat).split(",").includes(r.cat));
     if (ui.rSeason) list = list.filter(r => !r.seasons.length || r.seasons.includes(s));
     if (ui.rFav) list = list.filter(r => favs["r:" + r.id]);
     if (ui.rQ) {
@@ -806,9 +810,9 @@
       body = `<div class="r-carousel" id="rCarousel">${picks.map(recipeSlide).join("")}</div>
         <div class="r-dots" aria-hidden="true">${picks.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>
         ${section("Di stagione", list.filter(r => r.seasons.includes(s)), `<button class="link-btn" data-act="toggle" data-k="rSeason">Tutte ›</button>`)}
-        ${section("Pappe", byCat("pappa", "base"), more("rCat", "pappa"))}
+        ${section("Pappe", byCat("pappa", "base"), more("rCat", "pappa,base"))}
         ${section("Da prendere con le mani", byCat("pezzi"), more("rCat", "pezzi"))}
-        ${section("Colazione e merenda", byCat("colazione", "merenda"), more("rCat", "merenda"))}
+        ${section("Colazione e merenda", byCat("colazione", "merenda"), more("rCat", "colazione,merenda"))}
         ${section("Con tutta la famiglia", byCat("famiglia"), more("rCat", "famiglia"))}`;
     } else {
       body = `<p class="small muted">${plural(list.length, "ricetta", "ricette")}</p>
@@ -851,7 +855,7 @@
     if (!r) return `<div class="empty"><b>🤔</b>Ricetta non trovata. <a href="#/ricette">Torna alle ricette</a></div>`;
     const fav = favs["r:" + r.id];
     const m = ageM(), bb = !!BIMBY[r.id], { useB, steps } = recipeSteps(r), ver = ui.rVer || "pappa";
-    const chips = [`dai ${r.m} mesi`, RECIPE_CATS[r.cat]].concat(r.seasons.length ? ["🍂 " + r.seasons.join(" e ")] : [], useB ? ["TM31", "TM5", "TM6", "TM7"] : []);
+    const chips = [`dai ${r.m} mesi`, RECIPE_CATS[r.cat]].concat(r.seasons.length ? ["🍂 " + (r.seasons.length > 1 ? r.seasons.slice(0, -1).join(", ") + " e " + r.seasons[r.seasons.length - 1] : r.seasons[0])] : [], useB ? ["TM31", "TM5", "TM6", "TM7"] : []);
     const seg = (act, k, v, label, on) => `<button class="${on ? "on" : ""}" data-act="${act}"${k ? ` data-k="${k}"` : ""} data-v="${v}">${label}</button>`;
     return `
       <div class="rd-hero">
@@ -1018,7 +1022,7 @@
     let extra = "";
     if (g.id === "quando") {
       const a = age();
-      if (a && a.m < 6) extra = `<div class="note">${name()} compirà 6 mesi il <b>${fmt(a.six)}</b>.</div>`;
+      if (a && a.m < 6) extra = `<div class="note">${name()} compirà 6 mesi ${dayPrep(a.six, "il")}<b>${fmt(a.six)}</b>.</div>`;
     }
     return `
       <div class="article-hero"><div class="emoji">${g.e}</div><h1>${esc(g.t)}</h1><p class="muted">${esc(g.sub)}</p></div>
@@ -1055,7 +1059,7 @@
     const reactions = FOODS.filter(f => foods[f.id] && foods[f.id].r === "reaz");
     return `
       <div class="card tint-green">
-        <div class="card-kicker">📒 Il diario di ${name()}</div>
+        <div class="card-kicker">📒 Il diario di ${ofName()}</div>
         <h2 style="margin:0">${plural(tried, "cibo provato", "cibi provati")}</h2>
         <div class="allergen-grid">
           ${KEY_ALLERGENS.map(k => `<div class="allergen ${allergenIntroduced(k) ? "on" : ""}"><b>${ALLERGENS[k].e}</b>${ALLERGENS[k].n}</div>`).join("")}
@@ -1291,7 +1295,7 @@
   }
 
   // Modulo per aggiungere o modificare una voce
-  let pendingPhotos = [];
+  let pendingPhotos = [], resizing = 0;
   function openLog(type, date, id) {
     const x = id ? diary.find(v => v.id === id) : null;
     type = x ? x.type : type;
@@ -1322,7 +1326,7 @@
     } else if (type === "sonno") {
       f = `<div class="cols">${time("time", "Si è addormentato alle", v.time || nowHM())}${time("end", "Si è svegliato alle", v.end || "")}</div>
         <p class="small muted" style="margin-top:-6px">Lascia vuoto «svegliato» se sta ancora dormendo: lo segni dopo con un tocco. Se si sveglia dopo mezzanotte, va bene lo stesso.</p>
-        <div class="field"><span>Tipo</span></div>${pick("kind", [["nanna", "☀️ Nanna di giorno"], ["notte", "🌙 Notte"]], v.kind || (toMin(nowHM()) > 19 * 60 ? "notte" : "nanna"))}` + note;
+        <div class="field"><span>Tipo</span></div>${pick("kind", [["nanna", "☀️ Nanna di giorno"], ["notte", "🌙 Notte"]], v.kind || (toMin(nowHM()) > 19 * 60 || toMin(nowHM()) < 6 * 60 ? "notte" : "nanna"))}` + note;
     } else if (type === "pannolino") {
       f = time("time", "Ora", v.time || nowHM()) + `<div class="field"><span>Com'era?</span></div>${pick("kind", [["pipi", "💧 Pipì"], ["cacca", "💩 Cacca"], ["entrambi", "Entrambi"]], v.kind || "pipi")}` + note;
     } else if (type === "salute") {
@@ -1344,6 +1348,7 @@
     openSheet(`<h2>${T.e} ${x ? "Modifica · " : ""}${T.n}</h2>
       <p class="small muted" style="margin-top:-6px">${fmt(parseISO(d), { weekday: "long", day: "numeric", month: "long" })}</p>
       <form id="logForm" data-type="${type}" data-id="${esc(id || "")}" data-date="${d}">${f}
+        ${x || type === "traguardo" ? `<label class="field"><span>Giorno</span><input type="date" name="date" value="${d}" max="${iso(today0())}"${settings.birth ? ` min="${esc(settings.birth)}"` : ""} required></label>` : ""}
         <div class="btn-row"><button class="btn" type="submit" style="flex:1">Salva</button>
           ${x ? `<button class="btn danger" type="button" data-act="log-del" data-id="${esc(id)}">Elimina</button>` : ""}
           <button class="btn ghost" type="button" data-act="close">Annulla</button></div>
@@ -1360,7 +1365,7 @@
     });
   }
   function saveLog(f, fd) {
-    const type = f.dataset.type, id = f.dataset.id, d = f.dataset.date, old = id ? diary.find(v => v.id === id) : null;
+    const type = f.dataset.type, id = f.dataset.id, d = String(fd.get("date") || "") || f.dataset.date, old = id ? diary.find(v => v.id === id) : null;
     const g = k => String(fd.get(k) || "").trim();
     const x = Object.assign({}, old || {}, { id: id || "l" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date: d, type, time: g("time") });
     if (!old && me()) x.by = me();
@@ -1369,10 +1374,13 @@
       x.foods = g("foods").split(",").filter(Boolean); x.q = g("q"); x.r = g("r") || "si";
       if (!x.foods.length) { toast("Scegli almeno un cibo"); return false; }
       // il diario dei cibi provati si aggiorna da solo
+      const before = old && old.type === "pasto" ? old.foods || [] : [];
+      unlogFoods(before.filter(fid => !x.foods.includes(fid) || old.date !== d), old);
       x.foods.forEach(fid => {
         const e = foods[fid];
-        if (!e) foods[fid] = { date: d, r: x.r, n: 1, note: "", log: [d] };
-        else if (!old || !(old.foods || []).includes(fid)) { e.log = (e.log || [e.date]).filter(Boolean); if (!e.log.includes(d)) e.log.push(d); e.log = e.log.slice(-60); e.n = (e.n || 0) + 1; if (x.r === "reaz") e.r = "reaz"; }
+        if (!e) foods[fid] = { date: d, r: x.r, n: 1, note: "", log: [d], src: x.id };
+        else if (!before.includes(fid) || old.date !== d) { e.log = (e.log || [e.date]).filter(Boolean); if (!e.log.includes(d)) e.log.push(d); e.log = e.log.slice(-60); e.n = (e.n || 0) + 1; }
+        if (x.r === "reaz") foods[fid].r = "reaz";
       });
       S.set("foods", foods);
     } else if (type === "latte") { x.kind = g("kind"); x.side = g("side"); x.ml = Number(g("ml")) || ""; x.min = Number(g("min")) || ""; }
@@ -1410,9 +1418,22 @@
     raw.set("photoQueue", (raw.get("photoQueue", []) || []).filter(x => x !== pid));
     if (cfg) getCodec(cfg).then(c => postSync(cfg.url, { action: "blob-del", key: c.space, id: pid })).catch(() => { /* resta sul servizio */ });
   }
+  // Toglie dal diario dei cibi gli assaggi segnati con una pappa (voce cancellata, cibo tolto o giorno cambiato)
+  function unlogFoods(fids, entry) {
+    if (!entry) return;
+    fids.forEach(fid => {
+      const e = foods[fid];
+      if (!e) return;
+      if (e.src === entry.id && (e.n || 1) <= 1) { delete foods[fid]; return; }
+      const same = diary.some(v => v.id !== entry.id && !v.del && v.type === "pasto" && v.date === entry.date && (v.foods || []).includes(fid));
+      if (!same) e.log = (e.log || []).filter(v => v !== entry.date);
+      e.n = Math.max(1, (e.n || 1) - 1);
+    });
+  }
   function deleteLog(id) {
     const x = diary.find(v => v.id === id);
     if (!x) return;
+    if (x.type === "pasto") { unlogFoods(x.foods || [], x); S.set("foods", foods); }
     Object.keys(ms || {}).forEach(k => { if (ms[k] && ms[k].log === id) { ms[k] = null; S.set("ms", ms); } });
     (x.photos || []).forEach(dropPhoto);
     diary = diary.map(v => (v.id === id ? { id, del: true, date: x.date, type: x.type } : v));
@@ -1430,7 +1451,7 @@
 
   /* Foto del diario: sul telefono in IndexedDB; con la condivisione attiva vengono cifrate e salvate sul servizio,
      così le vedono anche gli altri telefoni della famiglia */
-  const phUrls = new Map(), phTried = new Set();
+  const phUrls = new Map(), phTried = new Map();
   async function photoUrl(pid) {
     if (phUrls.has(pid)) return phUrls.get(pid);
     let blob = await PhotoDB.get("d:" + pid).catch(() => null);
@@ -1465,8 +1486,8 @@
   }
   async function fetchSharedPhoto(pid) {
     const cfg = raw.get("sync", null);
-    if (!cfg || phTried.has(pid)) return null;
-    phTried.add(pid);
+    if (!cfg || Date.now() - (phTried.get(pid) || 0) < 60000) return null;
+    phTried.set(pid, Date.now());
     try {
       const codec = await getCodec(cfg), res = await postSync(cfg.url, { action: "blob-get", key: codec.space, id: pid });
       if (!res || !res.data) return null;
@@ -1541,6 +1562,7 @@
   function autoIcs(x) {
     const at = x.time ? atTime(iso(x.date), x.time) : null;
     return icsFile([at ? { uid: x.id.replace(/:/g, "-"), start: at, min: 30, t: x.t, desc: x.sub, alarms: [24 * 60, 60] }
+      : x.appt ? { uid: x.id.replace(/:/g, "-"), start: x.date, allDay: true, t: x.t, desc: x.sub, alarms: [15 * 60] }
       : { uid: x.id.replace(/:/g, "-"), start: x.date, allDay: true, t: x.t + " (da prenotare)", desc: x.sub + "\nIndicativo: prenota con il pediatra o il centro vaccinale.", alarms: [7 * 24 * 60 - 9 * 60] }]);
   }
   const remKey = (r, d, t) => r.id + "|" + d + "|" + t;
@@ -1560,7 +1582,7 @@
     const auto = autoReminders(), mine = remAll();
     const kindTxt = r => (r.kind === "once" ? fmt(parseISO(r.start), { day: "numeric", month: "short" }) + " alle " + r.time
       : r.kind === "daily" ? "Ogni giorno alle " + r.time + (r.days ? " per " + plural(r.days, "giorno", "giorni") : "")
-      : "Ogni " + r.every + " ore dalle " + r.time + " per " + plural(r.days || 1, "giorno", "giorni"));
+      : "Ogni " + (Number(r.every) === 1 ? "ora" : r.every + " ore") + " dalle " + r.time + " per " + plural(r.days || 1, "giorno", "giorni"));
     const perm = "Notification" in window ? Notification.permission : "unsupported";
     return `
       <div class="card tint-blue small">🔔 <b>Come funzionano.</b> Tocca <b>📅 Aggiungi al calendario</b>: il calendario del telefono ti avvisa anche con l'app chiusa. I promemoria compaiono anche in «Oggi»${perm === "granted" ? " e, con l'app aperta, arriva una notifica" : ""}.
@@ -1606,10 +1628,15 @@
   function checkNotify() {
     if (!("Notification" in window) || Notification.permission !== "granted" || !settings) return;
     const now = hm(new Date()), sent = raw.get("notified", {}) || {}, d = iso(today0());
-    todayRems().filter(x => !x.done && x.t <= now && toMin(now) - toMin(x.t) < 60 && !sent[x.key]).forEach(x => {
+    // promemoria di tutti i figli, non solo di quello aperto ora
+    kids.flatMap(k => {
+      const mine = k.id === activeKid, rs = (mine ? rem : raw.get("k." + k.id + ".rem", [])) || [], dn = (mine ? remDone : raw.get("k." + k.id + ".remDone", {})) || {};
+      return rs.filter(r => r && !r.del).flatMap(r => remTimes(r, d).map(t => ({ r, t, kid: k, key: remKey(r, d, t), done: !!dn[remKey(r, d, t)] })));
+    }).filter(x => !x.done && x.t <= now && toMin(now) - toMin(x.t) < 60 && !sent[x.key]).forEach(x => {
       sent[x.key] = 1;
+      const title = (x.r.e || "🔔") + " " + x.r.t + (kids.length > 1 && x.kid.name ? " · " + x.kid.name : "");
       const opts = { body: x.t + (x.r.note ? " · " + x.r.note : ""), icon: "icons/icon-192.png", tag: x.key };
-      navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(reg => reg.showNotification((x.r.e || "🔔") + " " + x.r.t, opts)).catch(() => { /* niente */ }) : new Notification(x.r.t, opts);
+      navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opts)).catch(() => { /* niente */ }) : new Notification(title, opts);
     });
     Object.keys(sent).forEach(k => { if (!k.includes("|" + d + "|")) delete sent[k]; });
     raw.set("notified", sent);
@@ -1642,8 +1669,14 @@
       });
       if (best) best.ids.forEach(id => use.add(id));
     });
-    const ids = [...use];
-    return { ids, fresh: ids.filter(id => !known.has(id)), al: [...new Set(r.al.concat(ids.map(id => foodById(id).al).filter(Boolean)))] };
+    const ids = [...use], idAl = ids.map(id => foodById(id).al).filter(Boolean), optAl = new Set(), without = [];
+    // un allergene che compare solo negli ingredienti facoltativi non blocca la ricetta: si prepara senza
+    r.ing.filter(i => /facoltativ/i.test(i)).forEach(l => FOODS.forEach(f => {
+      if (!f.al || !FOOD_KEYS[f.id] || !FOOD_KEYS[f.id].test(normTxt(l))) return;
+      optAl.add(f.al);
+      if (!idAl.includes(f.al) && !alOk(f.al) && !without.includes(f.id)) without.push(f.id);
+    }));
+    return { ids, without, fresh: ids.filter(id => !known.has(id)), al: [...new Set(r.al.filter(a => idAl.includes(a) || !optAl.has(a)).concat(idAl))] };
   }
   // Allergene introdotto e senza reazioni
   const alOk = a => allergenIntroduced(a) && !FOODS.some(f => f.al === a && foods[f.id] && foods[f.id].r === "reaz");
@@ -1694,7 +1727,7 @@
       </div>
       <div class="small muted">Pappe al giorno</div>
       <div class="segmented wk-meals">${[[0, "Secondo l'età"], [1, "Solo pranzo"], [2, "Pranzo e cena"]].map(([v, l]) => `<button class="${meals === v ? "on" : ""}" data-act="set-meals" data-v="${v}">${l}</button>`).join("")}</div>
-      ${from > iso(end) ? `<div class="card wk-info" style="margin:0 0 12px"><p class="small" style="margin:0">🥄 Le pappe partono intorno ai 6 mesi: per ${name()} dal <b>${fmt(parseISO(from), { weekday: "long", day: "numeric", month: "long" })}</b>. «Proponi» prepara la prima settimana, un cibo nuovo alla volta.</p></div>` : ""}
+      ${from > iso(end) ? `<div class="card wk-info" style="margin:0 0 12px"><p class="small" style="margin:0">🥄 Le pappe partono intorno ai 6 mesi: per ${ofName()} dal <b>${fmt(parseISO(from), { weekday: "long", day: "numeric", month: "long" })}</b>. «Proponi» prepara la prima settimana, un cibo nuovo alla volta.</p></div>` : ""}
       <div class="btn-row" style="margin:0 0 12px"><button class="btn small" data-act="plan-auto">✨ ${auto ? "Proponi di nuovo" : "Proponi la settimana"}</button>
         ${planned ? `<button class="btn ghost small" data-act="shop-add-plan">🛒 Ingredienti nella spesa</button><button class="btn ghost small" data-act="plan-clear">Svuota</button>` : ""}</div>
       ${days.map(d => {
@@ -1703,7 +1736,8 @@
           <div class="wk-slots">${MEALS.map(([m, l]) => {
             const r = p[m] && recipeById(p[m]);
             const f = r && k >= t ? recipeFit(r, knownBy(k, m)) : null;
-            const note = f && f.fit === "nuovo" ? `<em class="wk-new">✨ ${esc(foodName(f.fresh[0]))}</em>` : f && f.fit === "no" ? `<em class="wk-warn">⚠️ ${esc(f.why)}</em>` : "";
+            const note = (f && f.fit === "nuovo" ? `<em class="wk-new">✨ ${esc(foodName(f.fresh[0]))}</em>` : f && f.fit === "no" ? `<em class="wk-warn">⚠️ ${esc(f.why)}</em>` : "")
+              + (f && f.fit !== "no" && f.without.length ? `<em class="wk-warn">senza ${esc(f.without.map(foodName).join(", ").toLowerCase())}</em>` : "");
             const milk = !r && (k < from || (m === "cena" && mealsOn(k) < 2));
             return `<button class="wk-slot${r ? " full" : ""}${milk ? " milk" : ""}" data-act="plan-slot" data-d="${k}" data-m="${m}">${r ? `<span class="wk-e">${r.e}</span><span class="grow"><small>${l}</small><b>${esc(r.t)}</b>${note}</span>` : `<span class="grow"><small>${l}</small><span class="muted">${milk ? "🍼 Latte" : "＋ Scegli"}</span></span>`}</button>`;
           }).join("")}</div></div>`;
@@ -1723,7 +1757,7 @@
       <div class="card" style="padding:0;overflow:hidden" id="wkList">
         ${cur ? `<button class="food" data-act="plan-set" data-d="${d}" data-m="${m}" data-id=""><span class="st">✕</span><span class="grow">Lascia libero</span></button>` : ""}
         ${list.map(({ r, f }) => (f.fit !== last ? `<div class="wk-sep" data-sep="${(last = f.fit)}">${head[f.fit]}</div>` : "") +
-          `<button class="food" data-act="plan-set" data-d="${d}" data-m="${m}" data-id="${r.id}" data-n="${esc(normTxt(r.t + " " + r.ing.join(" ")))}"><span class="st">${r.e}</span><span class="grow">${esc(r.t)}<br><span class="small muted">dai ${r.m} mesi · ${r.min} min${f.fit !== "ok" ? " · " + esc(f.why) : ""}</span></span>${r.id === cur ? "✅" : ""}</button>`).join("")}
+          `<button class="food" data-act="plan-set" data-d="${d}" data-m="${m}" data-id="${r.id}" data-n="${esc(normTxt(r.t + " " + r.ing.join(" ")))}"><span class="st">${r.e}</span><span class="grow">${esc(r.t)}<br><span class="small muted">dai ${r.m} mesi · ${r.min} min${f.fit !== "ok" ? " · " + esc(f.why) : ""}${f.fit !== "no" && f.without.length ? " · senza " + esc(f.without.map(foodName).join(", ").toLowerCase()) : ""}</span></span>${r.id === cur ? "✅" : ""}</button>`).join("")}
       </div><button class="btn ghost block" data-act="close" style="margin-top:10px">Chiudi</button>`);
     const q = sheet.querySelector("#wkQ");
     q.addEventListener("input", () => {
@@ -1736,6 +1770,8 @@
   function setPlan(d, m, id) {
     const p = Object.assign({ pranzo: null, cena: null }, plan[d] || {}, { [m]: id || null });
     if (p.auto) { p.auto = Object.assign({}, p.auto); delete p.auto[m]; if (!Object.keys(p.auto).length) delete p.auto; }
+    p.skip = Object.assign({}, p.skip || {}); if (id) delete p.skip[m]; else p.skip[m] = 1;
+    if (!Object.keys(p.skip).length) delete p.skip;
     plan[d] = p;
     S.set("plan", plan);
   }
@@ -1754,6 +1790,7 @@
     });
     const known = knownBy(days[0] || from, "pranzo");
     let lastNew = Object.keys(foods).filter(id => foods[id] && foods[id].date).map(id => foods[id].date).sort().pop() || null;
+    const manualNew = days.filter(d => MEALS.some(([m]) => { const r = plan[d] && plan[d][m] && recipeById(plan[d][m]); return r && recipeNeeds(r, knownBy(d, m)).fresh.length; }));
     const used = {}, alWeek = {}, recent = [], fresh = [];
     let n = 0, empty = 0;
     days.forEach(d => {
@@ -1763,9 +1800,14 @@
       const p = plan[d] = Object.assign({ pranzo: null, cena: null }, plan[d] || {});
       MEALS.forEach(([m]) => {
         const mine = p[m] && recipeById(p[m]);
-        if (mine) { recipeNeeds(mine, known).ids.forEach(id => known.add(id)); used[mine.id] = (used[mine.id] || 0) + 1; recent.push(mine.id); return; }
-        if (!want.includes(m)) return;
-        const canNew = m === "pranzo" && (!lastNew || daysBetween(parseISO(lastNew), parseISO(d)) >= NEW_EVERY);
+        if (mine) {
+          const nm = recipeNeeds(mine, known);
+          if (nm.fresh.length) lastNew = d;
+          nm.ids.forEach(id => known.add(id)); used[mine.id] = (used[mine.id] || 0) + 1; recent.push(mine.id); return;
+        }
+        if (!want.includes(m) || (p.skip && p.skip[m])) return;
+        const canNew = m === "pranzo" && (!lastNew || daysBetween(parseISO(lastNew), parseISO(d)) >= NEW_EVERY)
+          && !manualNew.some(x => x !== d && Math.abs(daysBetween(parseISO(x), parseISO(d))) < NEW_EVERY);
         let best = null;
         pool.forEach(r => {
           const f = recipeFit(r, known);
@@ -1794,7 +1836,7 @@
       });
     });
     S.set("plan", plan);
-    return { n, empty, fresh, moved, from };
+    return { n, empty, fresh, moved: moved && from > iso(today0()), from };
   }
   // Lista della spesa condivisa con la famiglia
   const shopAll = () => (shop || []).filter(x => x && !x.del);
@@ -1819,11 +1861,13 @@
   function planIngredientsToShop() {
     const start = weekStart();
     let n = 0;
+    // solo i giorni che devono ancora venire, senza gli ingredienti facoltativi
     for (let k = 0; k < 7; k++) {
+      if (iso(addDays(start, k)) < iso(today0())) continue;
       const p = plan[iso(addDays(start, k))] || {};
       MEALS.forEach(([m]) => {
         const r = p[m] && recipeById(p[m]);
-        if (r) r.ing.filter(i => !/^(niente|acqua|1 litro d'acqua)/i.test(i)).forEach(i => { if (addShop(i.replace(/\s*\(.*\)\s*$/, ""), r.t)) n++; });
+        if (r) r.ing.filter(i => !/^(niente|acqua|1 litro d'acqua)/i.test(i) && !/facoltativ/i.test(i)).forEach(i => { if (addShop(i.replace(/\s*\(.*\)\s*$/, ""), r.t)) n++; });
       });
     }
     S.set("shop", shop);
@@ -1966,7 +2010,7 @@
       if (ev.end && ev.end !== ev.start) when = "dal " + fmt(d) + " al " + fmt(parseISO(ev.end), { day: "numeric", month: "long", year: "numeric" });
       if (ev.time) when += " · " + esc(ev.time);
     } else when = esc(ev.when || "Data da confermare");
-    const place = [ev.place, ev.town].filter(Boolean).map(esc).join(", ");
+    const placeRaw = [ev.place, ev.town].filter(Boolean).join(", "), place = esc(placeRaw);
     return `<div class="card"><div class="ev">
       ${d ? dateBox(ev) : `<div class="datebox tbd">${ev.e || "📅"}</div>`}
       <div class="grow" style="min-width:0">
@@ -1976,7 +2020,7 @@
         ${ev.desc ? `<p class="small" style="margin:8px 0 0">${esc(ev.desc)}</p>` : ""}
         <div class="btn-row">
           ${ev.link ? `<a class="btn ghost small" href="${esc(ev.link)}" target="_blank" rel="noopener">${ev.news ? "🗞️ Articolo" : "🔗 Sito"}</a>` : ""}
-          ${(ev.q || place) && !ev.news ? `<a class="btn ghost small" href="${mapsUrl(ev.q || place)}" target="_blank" rel="noopener">🗺️ Mappa</a>` : ""}
+          ${(ev.q || place) && !ev.news ? `<a class="btn ghost small" href="${mapsUrl(ev.q || placeRaw)}" target="_blank" rel="noopener">🗺️ Mappa</a>` : ""}
           ${d ? `<button class="btn ghost small" data-act="ics" data-id="${esc(ev.id)}">📅 Calendario</button>` : ""}
           ${ev.mine ? `<button class="btn danger small" data-act="ev-del" data-id="${esc(ev.id)}">Elimina</button>` : ""}
         </div>
@@ -2176,7 +2220,7 @@
       nextCard = `<div class="card tint-green"><div class="card-kicker">👉 Prossimo da introdurre</div>
         <h2 style="margin:0 0 6px">${ALLERGENS[al.k].e} ${ALLERGENS[al.k].n}</h2>
         <p class="small">${esc(al.how)}${al.recipe ? ` <a href="#/ricetta/${al.recipe}">Ricetta ›</a>` : ""}</p>
-        ${m < 6 && a ? `<p class="small"><b>Quando inizierete lo svezzamento</b> (dopo il ${fmt(a.six)}, d'accordo con il pediatra).</p>` : ""}
+        ${m < 6 && a ? `<p class="small"><b>Quando inizierete lo svezzamento</b> (dopo ${dayPrep(a.six, "il")}${fmt(a.six)}, d'accordo con il pediatra).</p>` : ""}
         ${m >= 6 && !p.canNew ? `<p class="small">Aspetta fino a <b>${fmt(p.waitUntil, { weekday: "long", day: "numeric", month: "long" })}</b>: lascia 2-3 giorni tra un allergene nuovo e il successivo.</p>` : ""}
         ${canAct ? `<button class="btn" data-act="al-intro" data-food="${al.food}">🍽️ Segna: introdotto oggi</button>` : ""}</div>`;
     }
@@ -2225,7 +2269,7 @@
 
   function growthChart(metric) {
     const mt = METRICS[metric];
-    const pts = growth.filter(g => g[mt.k]).map(g => ({ x: monthsAt(g.date), y: g[mt.k], g })).filter(p => p.x >= 0 && p.x <= 24);
+    const pts = growth.filter(g => g[mt.k]).map(g => ({ x: monthsAt(g.date), y: g[mt.k], g })).filter(p => p.x >= 0 && p.x <= 24).sort((a, b) => a.x - b.x);
     const maxX = Math.min(24, Math.max(12, Math.ceil(Math.max(ageM() + 1, ...pts.map(p => p.x)) / 3) * 3 + 3));
     const W = 340, H = 240, L = 34, R = 30, T = 20, B = 26;
     const curve = z => { const a = []; for (let x = 0; x <= maxX + 1e-9; x += 0.25) a.push([x, valueAtZ(z, lmsAt(metric, x))]); return a; };
@@ -2278,7 +2322,7 @@
       <div class="stats">${summary}</div>
       <div class="chips">${Object.keys(METRICS).map(k => `<button class="chip ${metric === k ? "on" : ""}" data-act="set" data-k="gMetric" data-v="${k}">${k === "head" ? "Testa" : METRICS[k].n}</button>`).join("")}</div>
       <div class="card">
-        <div class="card-kicker">📈 ${mt.n} di ${name()}</div>
+        <div class="card-kicker">📈 ${mt.n} di ${ofName()}</div>
         ${growthChart(metric)}
         <p class="small muted" style="margin:6px 0 0">Fascia chiara: dal 3° al 97° percentile OMS · fascia scura: dal 15° all'85° · linea tratteggiata: 50°. Tocca un punto per vedere il valore.</p>
       </div>
@@ -2334,7 +2378,7 @@
       const soon = !d && due && daysBetween(t, due) <= 45 && daysBetween(t, due) >= -60;
       return `<label class="check"><input type="checkbox" data-act="h-toggle" data-id="${id}" ${d ? "checked" : ""}>
         <span class="grow"><span class="title">${esc(title)}</span>
-        ${due ? `<span class="when">${dueM < 72 ? "Intorno al " + fmt(due, { day: "numeric", month: "long", year: "numeric" }) : "Verso i 6 anni"}</span>` : ""}
+        ${due ? `<span class="when">${dueM < 72 ? "Intorno " + dayPrep(due, "al") + fmt(due, { day: "numeric", month: "long", year: "numeric" }) : "Verso i 6 anni"}</span>` : ""}
         ${d ? `<span class="tag green">fatto · ${fmt(parseISO(d), { day: "numeric", month: "short" })}</span>` : soon ? (daysBetween(t, due) < 0 ? `<span class="tag yellow">da segnare</span>` : `<span class="tag peach">in arrivo</span>`) : ""}
         <span class="detail">${detail}</span></span></label>`;
     };
@@ -2491,7 +2535,7 @@
         </button>
       </div>
       <h1 class="mt-title">${e.m === 0 ? "Il primo mese di vita" : esc(e.t) + " di vita"}</h1>
-      ${isCur ? `<span class="tag purple">📍 L'età di ${name()}</span>` : ""}
+      ${isCur ? `<span class="tag purple">📍 L'età di ${ofName()}</span>` : ""}
       <p class="mt-intro">${esc(e.intro)}</p>
       ${e.items.map(it => `<h3 class="mt-h">${it.e} ${esc(it.t)}</h3>
         <p class="mt-p"><b>Cosa aspettarsi.</b> ${esc(it.expect)}</p>
@@ -2608,6 +2652,9 @@
   var SYNC_KID_LISTS = ["growth", "appts", "questions", "diary", "rem"];
   var SYNC_LOCAL_ONLY = ["sync", "activeKid", "evKm", "theme", "installDismissed", "feed", "cookMode", "photoQueue", "photoShare", "me", "onboarded", "lastBackup", "notified"];
   var syncing = false, syncTimer = null, applyingRemote = false, pendingRender = false;
+  // Si sta scrivendo in un campo della pagina: si aggiorna quando si esce dal campo
+  const editing = () => { const a = document.activeElement; return !!a && app.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); };
+  app.addEventListener("focusout", () => setTimeout(() => { if (pendingRender && sheet.hidden && !editing()) { pendingRender = false; render(true); } }, 0));
   const hashStr = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return (h >>> 0).toString(36) + str.length.toString(36); };
   function onLocalChange(k) {
     if (applyingRemote || !SYNC_LOCAL_ONLY || SYNC_LOCAL_ONLY.includes(k) || !raw.get("sync", null)) return;
@@ -2772,8 +2819,11 @@
       const data = await postSync(cfg.url, { key: codec.space, since, changes });
       if (!data || data.error || !Array.isArray(data.rec)) throw new Error((data && data.error) || "risposta non valida dal servizio");
       // Lo spazio sul servizio è stato ricreato (id diverso) o ha meno modifiche di quelle già viste: si riallinea tutto
+      // Se nel frattempo la condivisione è stata tolta o cambiata su questo telefono, la risposta non vale più
+      const stillSame = () => { const live = raw.get("sync", null); return !!live && (live.secret || live.key) === (cfg.secret || cfg.key); };
+      if (!stillSame()) return false;
       if (!cfg.full && (data.seq < since || (cfg.epoch && data.id && data.id !== cfg.epoch))) {
-        raw.set("sync", Object.assign({}, raw.get("sync", cfg), { full: true }));
+        raw.set("sync", Object.assign({}, raw.get("sync", null), { full: true }));
         syncAgain = syncAgain || "auto";
         return false;
       }
@@ -2790,6 +2840,7 @@
         if (o) onServer.add(o.n);
         if (o && JSON.stringify(cur[o.n]) !== JSON.stringify(o.v)) { cur[o.n] = o.v; changed = true; }
       }
+      if (!stillSame()) return false;
       // Modifiche fatte su questo telefono mentre la sincronizzazione era in corso: si tengono e partono al giro dopo
       const latest = flatten(), dirty = [];
       Object.keys(latest).forEach(n => { if (JSON.stringify(latest[n]) !== startJson[n]) { cur[n] = latest[n]; dirty.push(n); } });
@@ -2802,7 +2853,7 @@
       let resend = keepDiary.size > 0;
       keepDiary.forEach(n => { delete newMeta[n]; });
       if (cfg.full) Object.keys(cur).forEach(n => { if (!onServer.has(n)) { delete newMeta[n]; resend = true; } });
-      const saved = Object.assign({}, raw.get("sync", cfg), { seq: data.seq, meta: newMeta, last: Date.now(), err: "" });
+      const saved = Object.assign({}, raw.get("sync", null), { seq: data.seq, meta: newMeta, last: Date.now(), err: "" });
       if (data.id) saved.epoch = data.id;
       delete saved.full; delete saved.triedCentral;
       raw.set("sync", saved);
@@ -2810,7 +2861,7 @@
       setTimeout(uploadPhotos, 200);
       if (!cfg.ro && Date.now() - (Number(raw.get("lastBackup", 0)) || 0) > 24 * 3600e3) setTimeout(autoBackup, 1500);
       if (dirty.length || resend) syncTimer = setTimeout(() => syncNow(false), 1500);
-      if (changed || manual || /impostazioni/.test(location.hash)) { if (sheet.hidden) render(true); else pendingRender = true; }
+      if (changed || manual || /impostazioni/.test(location.hash)) { if (sheet.hidden && !editing()) render(true); else pendingRender = true; }
       if (manual) toast(changed ? "Dati aggiornati dalla famiglia ✅" : "Tutto sincronizzato ✅");
       return true;
     } catch (err) {
@@ -2819,16 +2870,18 @@
       if (err && err.net && central && cfg.url !== central && !cfg.triedCentral) {
         try {
           const codec = await getCodec(cfg), probe = await postSync(central, { key: codec.space, since: 0, changes: [] });
-          if (probe && probe.seq > 0) { raw.set("sync", Object.assign(raw.get("sync", cfg), { url: central, err: "" })); syncAgain = manual ? "manual" : "auto"; return false; }
+          const live = raw.get("sync", null);
+          if (probe && probe.seq > 0 && live) { raw.set("sync", Object.assign(live, { url: central, err: "" })); syncAgain = manual ? "manual" : "auto"; return false; }
         } catch (e2) { /* anche il servizio dell'app non risponde */ }
-        raw.set("sync", Object.assign(raw.get("sync", cfg), { triedCentral: true }));
+        const live = raw.get("sync", null);
+        if (live) raw.set("sync", Object.assign(live, { triedCentral: true }));
       }
       const c = raw.get("sync", null);
       if (c) {
         raw.set("sync", Object.assign(c, { err: String(err && err.message || err) }));
         syncFails++;
         retryTimer = setTimeout(() => syncNow(false), Math.min(300, 15 * Math.pow(2, syncFails - 1)) * 1000);
-        if (/impostazioni/.test(location.hash) && sheet.hidden) render(true);
+        if (/impostazioni/.test(location.hash) && sheet.hidden && !editing()) render(true);
       }
       if (manual) toast("Sincronizzazione non riuscita: " + String(err && err.message || err) + ". Riprovo da solo.");
       return false;
@@ -2844,7 +2897,7 @@
   function inviteCode(c) {
     c = c || raw.get("sync", null);
     if (!c) return "";
-    return c.v === 2 ? "PP2-" + b64u(JSON.stringify(Object.assign({ u: c.url, s: c.secret }, c.ro ? { r: 1 } : {}))) : "PP1-" + b64u(JSON.stringify({ u: c.url, k: c.key }));
+    return c.v === 2 ? "PP2-" + b64u(JSON.stringify(Object.assign({ u: c.url, s: c.secret }, c.ro ? { r: 1 } : {}))) : "PP1-" + b64u(JSON.stringify(Object.assign({ u: c.url, k: c.key }, c.ro ? { r: 1 } : {})));
   }
   function parseInvite(text) {
     const m = String(text || "").match(/PP([12])-[A-Za-z0-9_-]+/);
@@ -2853,7 +2906,7 @@
       const o = JSON.parse(unb64u(m[0].slice(4)));
       if (!o || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(o.u)) return null;
       if (m[1] === "2") return String(o.s || "").length >= 20 ? Object.assign({ v: 2, url: o.u, secret: o.s }, o.r ? { ro: true } : {}) : null;
-      return String(o.k || "").length >= 20 ? { url: o.u, key: o.k } : null;
+      return String(o.k || "").length >= 20 ? Object.assign({ url: o.u, key: o.k }, o.r ? { ro: true } : {}) : null;
     } catch (e) { return null; }
   }
   function randomKey() { const a = new Uint8Array(24); crypto.getRandomValues(a); return bytesToB64u(a); }
@@ -2957,14 +3010,15 @@
   async function openBackups() {
     const c = raw.get("sync", null);
     if (!c) return;
-    openSheet(`<h2>🗂️ Copie di sicurezza</h2><p class="small muted">Cerco le copie…</p>`);
+    openSheet(`<h2 id="backups">🗂️ Copie di sicurezza</h2><p class="small muted">Cerco le copie…</p>`);
     let res = null;
     try { const codec = await getCodec(c); res = await postSync(c.url, { action: "backup-list", key: codec.space }); } catch (e) { res = { error: String(e.message || e) }; }
     const body = res && Array.isArray(res.list)
       ? (res.list.length ? `<div class="card" style="padding:0;overflow:hidden">${res.list.map(x => `<div class="food"><span class="st">🗂️</span><span class="grow">${fmt(parseISO(x.d), { weekday: "long", day: "numeric", month: "long", year: "numeric" })}<br><span class="small muted">${Math.max(1, Math.round(x.size / 1024))} KB</span></span><button class="btn ghost small" data-act="backup-restore" data-d="${esc(x.d)}">Ripristina</button></div>`).join("")}</div>`
         : `<p class="small">Ancora nessuna copia: la prima viene fatta in automatico entro un giorno.</p>`)
       : `<p class="small">${res && res.error ? "Non riesco a leggere le copie: " + esc(res.error) : "Il servizio Google va aggiornato alla versione 6 per le copie di sicurezza."}</p>`;
-    openSheet(`<h2>🗂️ Copie di sicurezza</h2>
+    if (!sheetShows("backups")) return;
+    openSheet(`<h2 id="backups">🗂️ Copie di sicurezza</h2>
       <p class="small">Ogni settimana il servizio salva una copia dei dati della famiglia nella cartella «Piccoli Passi - copie» del Drive, <b>cifrata</b> come i dati. Restano le ultime 6. Le foto del diario sono già nella cartella delle foto.</p>
       ${body}
       <p class="small muted">«Ripristina» riporta i dati com'erano quel giorno; quello che avete aggiunto dopo resta.</p>
@@ -2981,8 +3035,11 @@
       let n = 0;
       for (const r of res.rec) { if (r.d) continue; const o = await codec.decode(r); if (o) { cur[o.n] = o.v; delete meta[o.n]; n++; } }
       unflatten(cur);
-      raw.set("sync", Object.assign({}, raw.get("sync", c), { meta }));
-      closeSheet(); render(true); toast("Ripristinati " + n + " elementi ✅");
+      if (!raw.get("sync", null)) return;
+      raw.set("sync", Object.assign({}, raw.get("sync", null), { meta }));
+      if (sheetShows("backups")) closeSheet();
+      if (sheet.hidden) render(true); else pendingRender = true;
+      toast("Ripristinati " + n + " elementi ✅");
       syncNow(false);
     } catch (e) { toast("Ripristino non riuscito: " + (e.message || e)); }
   }
@@ -2990,7 +3047,8 @@
   // Membri in sola lettura (nonni): l'app non permette modifiche e non invia nulla
   const isRO = () => { const c = raw.get("sync", null); return !!(c && c.ro); };
   const RO_BLOCK = new Set(["log-add", "log-del", "sleep-start", "sleep-stop", "food", "food-again", "food-del", "g-add", "g-del", "ap-add", "ap-del", "ready", "done", "fav",
-    "kid-add", "kid-del", "ms-toggle", "plan-slot", "plan-auto", "plan-clear", "shop-add-plan", "shop-toggle", "shop-del", "shop-clear", "rem-add", "rem-done", "rem-del", "ev-add", "ev-del", "home-open", "sync-newfamily", "sync-encrypt", "backup-restore"]);
+    "kid-add", "kid-del", "ms-toggle", "plan-slot", "plan-auto", "plan-clear", "shop-add-plan", "shop-toggle", "shop-del", "shop-clear", "rem-add", "rem-done", "rem-del", "ev-add", "ev-del", "home-open", "sync-newfamily", "sync-encrypt", "backup-restore",
+    "al-offer", "al-intro", "h-toggle", "q-add", "q-del", "q-toggle", "plan-set", "set-meals", "vid-del", "vid-add"]);
   // Chi usa questo telefono: compare sulle voci del diario e della spesa
   const me = () => String(raw.get("me", "") || "");
   // Modifiche fatte qui e non ancora arrivate al servizio (per l'indicatore in alto)
@@ -3016,12 +3074,14 @@
   window.addEventListener("offline", updateNetChip);
 
   // Verifica del collegamento: cosa raggiunge questo telefono (da mandare a chi aiuta, senza dati personali)
+  const sheetShows = id => !sheet.hidden && !!sheet.querySelector("#" + id);
   async function openSyncCheck() {
     const c = raw.get("sync", null);
     if (!c) return;
     const central = centralUrl(), idOf = u => { const m = String(u).match(/\/s\/([^/]+)\//); return m ? "…" + m[1].slice(-8) : String(u).replace(/^https?:\/\//, "").slice(0, 40); };
     const rows = [];
-    const draw = done => openSheet(`<h2>🔍 Verifica del collegamento</h2>
+    let shown = false;
+    const draw = done => (shown && !sheetShows("syncCheck")) ? null : (shown = true) && openSheet(`<h2 id="syncCheck">🔍 Verifica del collegamento</h2>
       <div class="card" style="padding:0;overflow:hidden">${rows.map(r => `<div class="food"><span class="st">${r.ok == null ? "⏳" : r.ok ? "✅" : "❌"}</span><span class="grow">${esc(r.t)}<br><span class="small muted">${esc(r.d || "")}</span></span></div>`).join("")}</div>
       <p class="small muted">${done ? "Se qualcosa è ❌, fai uno screenshot di questa pagina e mandalo a chi ti aiuta: non contiene dati personali." : "Verifico…"} Versione ${VERSION}.</p>
       <button class="btn ghost block" data-act="close">Chiudi</button>`);
@@ -3092,7 +3152,7 @@
     if (!inv) { toast("Codice di invito non valido"); return; }
     if (kids.length && !confirm("Sostituire i dati di questo telefono con quelli condivisi dalla famiglia?")) return;
     applyingRemote = true;
-    try { Object.keys(localStorage).filter(k => /^pp\.(k\.|kids$|favs$|myEvents$|videos$|contacts$|home$|shop$)/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
+    try { Object.keys(localStorage).filter(k => /^pp\.(k\.|kids$|favs$|myEvents$|videos$|contacts$|home$|shop$|photoQueue$)/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ }
     applyingRemote = false;
     kids = []; favs = {}; myEvents = []; videos = {}; contacts = {}; home = null; shop = []; activeKid = null; raw.set("activeKid", null); loadKid();
     raw.set("sync", Object.assign({}, inv, { seq: 0, meta: {}, last: 0, err: "" }));
@@ -3193,7 +3253,7 @@
   function viewSettings() {
     return `
       <form class="card" id="settingsForm">
-        <h2>👶 Profilo di ${name()}</h2>
+        <h2>👶 Profilo di ${ofName()}</h2>
         <label class="field"><span>Nome</span><input type="text" name="name" value="${esc(settings.name || "")}" autocomplete="off"></label>
         <label class="field"><span>Data di nascita</span><input type="date" name="birth" value="${esc(settings.birth || "")}" max="${iso(today0())}" required></label>
         <label class="field"><span>Curve di crescita</span><select name="sex"><option value="m" ${settings.sex !== "f" ? "selected" : ""}>Maschio</option><option value="f" ${settings.sex === "f" ? "selected" : ""}>Femmina</option></select></label>
@@ -3479,8 +3539,9 @@
       case "reset":
         if (confirm("Vuoi davvero cancellare tutti i dati (diario, preferiti, eventi)?")) {
           try { Object.keys(localStorage).filter(k => k.startsWith("pp.")).forEach(k => localStorage.removeItem(k)); } catch (err) { /* ignore */ }
+          clearTimeout(syncTimer); clearTimeout(retryTimer);
           kids = []; raw.set("kids", kids); switchKid(null);
-          favs = {}; myEvents = []; contacts = {}; videos = {};
+          favs = {}; myEvents = []; contacts = {}; videos = {}; home = null; shop = []; evKm = 50; theme = "auto"; applyTheme();
           location.hash = "#/oggi"; render(false);
         }
         break;
@@ -3502,15 +3563,16 @@
   }, true);
 
   document.addEventListener("change", e => {
+    if (isRO() && e.target.dataset && /^(import|lg-photo)$/.test(e.target.dataset.act)) { e.target.value = ""; toast("👀 Sei in sola lettura: puoi guardare tutto, ma non modificare"); return; }
     if (e.target.dataset && e.target.dataset.change === "me") { raw.set("me", e.target.value.trim().slice(0, 30)); toast("Fatto: le tue voci avranno il nome «" + (me() || "—") + "»"); return; }
     if (e.target.dataset && e.target.dataset.act === "lg-photo" && e.target.files.length) {
       const files = [...e.target.files].slice(0, 10), prev = sheet.querySelector("#lgPrev");
       e.target.value = "";
-      files.forEach(file => resizeImage(file, 1440).then(blob => {
+      files.forEach(file => { resizing++; resizeImage(file, 1440).then(blob => {
         const pid = Date.now().toString(36) + Math.random().toString(36).slice(2, 10), u = URL.createObjectURL(blob);
         pendingPhotos.push({ id: pid, blob });
         if (prev) prev.insertAdjacentHTML("beforeend", `<span data-new="${pid}"><img src="${u}" alt=""><button type="button" data-act="lg-unphoto" aria-label="Togli">✕</button></span>`);
-      }).catch(() => toast("Non riesco a leggere questa foto")));
+      }).catch(() => toast("Non riesco a leggere questa foto")).finally(() => { resizing--; }); });
       return;
     }
     if (e.target.dataset && e.target.dataset.act === "photo" && e.target.files[0]) {
@@ -3528,7 +3590,9 @@
         try {
           const data = JSON.parse(reader.result);
           if (data.app !== "piccoli-passi") throw new Error("formato");
-          if (!confirm("Importare i dati? Quelli presenti su questo telefono verranno sostituiti.")) return;
+          if (!confirm(raw.get("sync", null)
+            ? "La condivisione è attiva: i dati verranno sostituiti con quelli del file anche sui telefoni della famiglia, e quello che è stato aggiunto dopo il file andrà perso. Procedo?"
+            : "Importare i dati? Quelli presenti su questo telefono verranno sostituiti.")) return;
           let newKids, kidData;
           if (data.v >= 2) { newKids = data.kids || []; kidData = data.kidData || {}; }
           else {
@@ -3542,7 +3606,7 @@
           SHARED_KEYS.forEach(k => { if (data[k] != null) raw.set(k, data[k]); });
           Object.keys(data.photos || {}).forEach(pid => PhotoDB.set("d:" + pid, new Blob([b64uToBytes(data.photos[pid])], { type: "image/jpeg" })).catch(() => { /* spazio pieno */ }));
           switchKid(kids.some(k => k.id === data.activeKid) ? data.activeKid : (kids[0] || {}).id || null);
-          favs = raw.get("favs", {}); myEvents = raw.get("myEvents", []); contacts = raw.get("contacts", {}); videos = raw.get("videos", {}); shop = raw.get("shop", []);
+          favs = raw.get("favs", {}); myEvents = raw.get("myEvents", []); contacts = raw.get("contacts", {}); videos = raw.get("videos", {}); shop = raw.get("shop", []); home = raw.get("home", null);
           evKm = raw.get("evKm", 50); theme = raw.get("theme", "auto"); applyTheme();
           toast("Dati importati ✅"); render(false);
         } catch (err) { toast("File non valido"); }
@@ -3626,6 +3690,7 @@
         <p class="small muted">Si apre il calendario con l'evento e l'avviso già impostati: conferma con «Aggiungi».</p>
         <button class="btn ghost block" data-act="close" style="margin-top:8px">Più tardi</button>`);
     } else if (f.id === "logForm") {
+      if (resizing) { toast("Sto preparando le foto, un attimo…"); return; }
       if (saveLog(f, fd)) { closeSheet(); toast("Segnato nel diario ✅"); render(true); }
     } else if (f.id === "apptForm") {
       appts.push({ id: "ap" + Date.now(), type: fd.get("type"), t: String(fd.get("t") || "").trim(), date: fd.get("date"),
