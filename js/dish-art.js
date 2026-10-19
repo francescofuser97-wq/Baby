@@ -43,6 +43,7 @@
     "minestrone": { bowl: "#E6B864", tex: "broth", chunks: [C.carota, C.zucchina, C.patata, C.zucca, C.fagioli], plate: [["cube", "mix", 14]] },
     "biscotti-avena": { plate: [["cookie", "#D9AF78", 4]] }
   };
+  Object.assign(LOOKS, window.EXTRA_LOOKS || {});
 
   /* --- utilità --- */
   // Mescola un colore con il bianco (k = quanto bianco): fondo pastello diverso per ogni piatto

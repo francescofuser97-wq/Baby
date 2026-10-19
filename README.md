@@ -6,7 +6,7 @@ L'app è divisa in cinque sezioni:
 
 - **Oggi**: il riquadro del mese (illustrazione, età, avanzamento, aggiornamento del mese), il diario di oggi con l'aggiunta rapida (pappa, latte, nanna con timer, pannolino, foto, peso), appuntamenti e vaccinazioni in arrivo, allergene da introdurre, consiglio, ricetta, gioco ed eventi del giorno.
 - **Diario**: calendario mensile; per ogni giorno pappe (con i cibi, che entrano da soli tra i cibi provati), latte, nanne (anche a cavallo della mezzanotte), pannolini, peso e misure (che finiscono nelle curve di crescita), salute (febbre, farmaci, sintomi), prime volte, note e foto. Poi **Ricordi** (tutte le foto per mese) e **Andamento** (sonno, poppate, pappe e pannolini delle ultime due settimane).
-- **Pappa**: ricette (con versione Bimby®), settimana delle pappe con proposta automatica, lista della spesa condivisa, guida allo svezzamento, cibi provati, percorso allergeni.
+- **Pappa**: quasi 100 ricette per il primo anno, dalle prime pappe di una sola verdura o frutta ai piatti a pezzi (quasi tutte con la versione Bimby®), settimana delle pappe con proposta automatica, lista della spesa condivisa, guida allo svezzamento, cibi provati, percorso allergeni.
 - **Salute**: agenda, promemoria (vitamina D, farmaci ogni tot ore, bilanci e vaccinazioni in arrivo: si aggiungono al calendario del telefono, che avvisa anche ad app chiusa), bilanci, vaccinazioni, curve di crescita OMS, domande per il pediatra, guide «Come si fa», azienda sanitaria della zona; dal 🆘 in alto le emergenze.
 - **Scopri**: giochi, tappe dello sviluppo da spuntare (finiscono nel diario) con i segnali per cui parlarne con il pediatra, mese per mese, libri e filastrocche, eventi e luoghi del proprio comune.
 
@@ -64,7 +64,7 @@ Installazione sul telefono:
 |---|---|
 | `js/config.js` | indirizzo del servizio centrale |
 | `js/app.js` | l'app |
-| `js/data-recipes.js`, `js/dish-art.js` | ricette e loro illustrazioni |
+| `js/data-recipes.js`, `js/data-recipes-more.js`, `js/dish-art.js` | ricette (le prime 32 e le altre del primo anno) e loro illustrazioni |
 | `js/data-bimby.js` | versione Bimby® delle ricette (TM31, TM5, TM6, TM7); Bimby® è un marchio di Vorwerk, l'app non è collegata a Vorwerk |
 | `js/data-guide.js` | guida, cibi del diario, consigli, tappe |
 | `js/data-activities.js` | giochi e attività |

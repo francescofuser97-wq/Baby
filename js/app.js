@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "5.1.0";
+  const VERSION = "5.2.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -784,8 +784,9 @@
     if (ui.rSeason) list = list.filter(r => !r.seasons.length || r.seasons.includes(s));
     if (ui.rFav) list = list.filter(r => favs["r:" + r.id]);
     if (ui.rQ) {
-      const q = ui.rQ.toLowerCase();
-      list = list.filter(r => (r.t + " " + r.ing.join(" ")).toLowerCase().includes(q));
+      // cerca anche negli allergeni, così «pesce» trova orata, platessa e trota
+      const q = normTxt(ui.rQ.trim());
+      list = list.filter(r => normTxt(r.t + " " + r.ing.join(" ") + " " + r.al.map(a => (window.ALLERGENS[a] || {}).n).join(" ")).includes(q));
     }
     const chip = (key, val, label) => `<button class="chip ${ui[key] === val ? "on" : ""}" data-act="set" data-k="${key}" data-v="${val}">${label}</button>`;
     const toggle = (key, label) => `<button class="chip ${ui[key] ? "on" : ""}" data-act="toggle" data-k="${key}">${label}</button>`;

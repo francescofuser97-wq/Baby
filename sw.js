@@ -1,6 +1,6 @@
 /* Service worker: rende l'app disponibile anche offline.
    Quando modifichi l'app, aumenta CACHE per far scaricare la nuova versione. */
-const CACHE = "piccoli-passi-v26";
+const CACHE = "piccoli-passi-v27";
 const ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const ASSETS = [
   "./js/areas/ovest-vicentino.js",
   "./js/data-recipes.js",
   "./js/data-bimby.js",
+  "./js/data-recipes-more.js",
   "./js/data-guide.js",
   "./js/data-activities.js",
   "./js/data-health.js",
