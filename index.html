@@ -23,12 +23,14 @@
 </head>
 <body>
   <header class="topbar">
-    <button class="icon-btn" id="btnBack" aria-label="Indietro" hidden>‹</button>
+    <button class="icon-btn" id="btnBack" aria-label="Indietro" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5 7.5 12l7 7"/></svg></button>
     <a class="brand" href="#/oggi" id="brand"><img src="icons/icon.svg" alt="" width="28" height="28"><span id="topTitle">Piccoli Passi</span></a>
     <button class="net-chip" id="netChip" data-act="net-chip" hidden></button>
     <button class="kid-chip" id="kidChip" hidden></button>
-    <a class="icon-btn" href="#/emergenze" aria-label="Emergenze">🆘</a>
-    <a class="icon-btn" href="#/impostazioni" aria-label="Impostazioni">⚙️</a>
+    <div class="tb-group">
+      <a class="icon-btn ic-sos" href="#/emergenze" aria-label="Emergenze"><svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v9M7.5 12h9"/></svg></a>
+      <a class="icon-btn" href="#/impostazioni" aria-label="Impostazioni"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></a>
+    </div>
   </header>
 
   <main id="app" tabindex="-1"></main>

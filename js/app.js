@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "5.3.1";
+  const VERSION = "5.4.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -1879,8 +1879,8 @@
     { e: "🏠", t: "Oggi", d: "Ogni giorno: l'età e il mese che sta vivendo, il diario della giornata a portata di tocco, appuntamenti, promemoria e un consiglio, una ricetta e un gioco adatti a lui." },
     { e: "📅", t: "Diario", d: "Un calendario dove segnare pappe, poppate, nanne, pannolini, peso, febbre, prime volte e foto. In «Ricordi» trovi tutte le foto mese per mese, in «Andamento» sonno e poppate delle ultime settimane." },
     { e: "🥣", t: "Pappa", d: "Ricette per lo svezzamento (anche con il Bimby), la settimana delle pappe con la lista della spesa, la guida, i cibi provati e il percorso degli allergeni." },
-    { e: "🩺", t: "Salute e Scopri", d: "Agenda, promemoria, curve di crescita e guide pratiche; poi giochi, tappe dello sviluppo, mese per mese ed eventi vicino a casa. Dal 🆘 in alto, sempre, le emergenze." },
-    { e: "👨‍👩‍👧", t: "Con la famiglia", d: "Da ⚙️ Impostazioni puoi condividere tutto con il partner (o in sola lettura con i nonni): i dati partono cifrati e restano solo vostri." }
+    { e: "🩺", t: "Salute e Scopri", d: "Agenda, promemoria, curve di crescita e guide pratiche; poi giochi, tappe dello sviluppo, mese per mese ed eventi vicino a casa. Dalla croce rossa in alto, sempre, le emergenze." },
+    { e: "👨‍👩‍👧", t: "Con la famiglia", d: "Dall'ingranaggio in alto (Impostazioni) puoi condividere tutto con il partner (o in sola lettura con i nonni): i dati partono cifrati e restano solo vostri." }
   ];
   function openTour(i) {
     const x = TOUR[i], last = i === TOUR.length - 1;

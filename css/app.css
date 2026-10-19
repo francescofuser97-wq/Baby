@@ -405,7 +405,7 @@ label.field small { display: block; margin-top: 6px; }
 .kid-dot { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 800; font-size: .9rem; flex: none; }
 .kid-dot.big { width: 40px; height: 40px; font-size: 1.1rem; }
 .kid-row { align-items: center; }
-@media (max-width: 360px) { .kid-chip .kid-name { display: none; } }
+@media (max-width: 430px) { .kid-chip .kid-name { display: none; } .kid-chip { padding-right: 8px; } }
 
 /* Video */
 .vid-row { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -711,3 +711,210 @@ img[data-ph].missing { background: var(--surface-2) url("data:image/svg+xml,%3Cs
 .tour p { color: var(--muted); font-size: 1.04rem; line-height: 1.55; min-height: 6.5em; }
 .tour .btn-row { margin-top: 14px; }
 .wk-day.past { opacity: .5; }
+
+/* =====================================================================
+   Liquid Glass
+   Lo strato di navigazione (barre, pulsanti flottanti, finestre, avvisi) è di vetro: traslucido, sfocato,
+   con il bordo che cattura la luce. Il contenuto (schede, liste) è vetro smerigliato più pieno, leggibile.
+   Dietro a tutto c'è uno sfondo morbido a colori che dà vita al vetro.
+   ===================================================================== */
+:root {
+  --radius: 22px;
+  --glass: rgba(255, 255, 255, .52);
+  --glass-strong: rgba(255, 251, 247, .78);
+  --glass-card: rgba(255, 255, 255, .68);
+  --glass-pill: rgba(255, 255, 255, .86);
+  --glass-rim: rgba(255, 255, 255, .9);
+  --glass-edge: rgba(255, 255, 255, .62);
+  --glass-shadow: 0 10px 30px rgba(70, 45, 30, .13), 0 2px 6px rgba(70, 45, 30, .06);
+  --glass-soft-shadow: 0 1px 2px rgba(70, 45, 30, .05), 0 8px 22px rgba(70, 45, 30, .07);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .5), rgba(255, 255, 255, .08) 46%, rgba(255, 255, 255, 0) 60%, rgba(255, 255, 255, .18));
+  --glass-blur: blur(24px) saturate(1.9);
+  --accent-ink: color-mix(in srgb, var(--primary) 82%, var(--ink));
+  --amb-1: #FFD2BD; --amb-2: #FFEDB3; --amb-3: #CDEEDD; --amb-4: #E2D7FB; --amb-5: #D3E6FA;
+  --shadow: var(--glass-soft-shadow);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --glass: rgba(52, 44, 40, .46);
+    --glass-strong: rgba(34, 29, 26, .8);
+    --glass-card: rgba(48, 41, 37, .6);
+    --glass-pill: rgba(255, 255, 255, .14);
+    --glass-rim: rgba(255, 255, 255, .2);
+    --glass-edge: rgba(255, 255, 255, .1);
+    --glass-shadow: 0 10px 30px rgba(0, 0, 0, .4), 0 2px 6px rgba(0, 0, 0, .25);
+    --glass-soft-shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 22px rgba(0, 0, 0, .2);
+    --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .02) 46%, rgba(255, 255, 255, 0) 60%, rgba(255, 255, 255, .05));
+    --amb-1: #5B2C20; --amb-2: #4A3814; --amb-3: #1B4032; --amb-4: #33264F; --amb-5: #1C3350;
+  }
+}
+:root[data-theme="dark"] {
+  --glass: rgba(52, 44, 40, .46);
+  --glass-strong: rgba(34, 29, 26, .8);
+  --glass-card: rgba(48, 41, 37, .6);
+  --glass-pill: rgba(255, 255, 255, .14);
+  --glass-rim: rgba(255, 255, 255, .2);
+  --glass-edge: rgba(255, 255, 255, .1);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, .4), 0 2px 6px rgba(0, 0, 0, .25);
+  --glass-soft-shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 22px rgba(0, 0, 0, .2);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .02) 46%, rgba(255, 255, 255, 0) 60%, rgba(255, 255, 255, .05));
+  --amb-1: #5B2C20; --amb-2: #4A3814; --amb-3: #1B4032; --amb-4: #33264F; --amb-5: #1C3350;
+}
+
+/* Sfondo: macchie di colore morbide, ferme mentre si scorre */
+body::before {
+  content: ""; position: fixed; inset: -12vmax; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(42vmax 34vmax at 6% 2%, var(--amb-1), transparent 70%),
+    radial-gradient(36vmax 30vmax at 98% 8%, var(--amb-2), transparent 70%),
+    radial-gradient(44vmax 36vmax at -4% 60%, var(--amb-3), transparent 70%),
+    radial-gradient(40vmax 36vmax at 104% 76%, var(--amb-4), transparent 70%),
+    radial-gradient(36vmax 28vmax at 50% 110%, var(--amb-5), transparent 70%);
+  opacity: .9;
+}
+
+/* --- Materiale vetro (strato di navigazione) --- */
+.tabbar, .topbar .icon-btn, .tb-group, .kid-chip, .net-chip, .rd-btn, .hubnav a, .r-slide-card, .mh-badge, .cook-timer, .r-badge {
+  background-color: var(--glass); background-image: var(--glass-sheen);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim), inset 0 -1px 1px rgba(255, 255, 255, .12);
+}
+/* il vetro «reagisce» al tocco: si gonfia un poco */
+.tabbar a, .topbar .icon-btn, .kid-chip, .rd-btn, .hubnav a, .btn, .chip, .segmented button, .lg-quick button, .lg-quick a, .lg-add button, .mh-open {
+  transition: transform .35s cubic-bezier(.3, 1.6, .5, 1), background-color .25s, box-shadow .25s, color .2s;
+}
+.tabbar a:active, .topbar .icon-btn:active, .kid-chip:active, .rd-btn:active, .hubnav a:active, .chip:active, .lg-quick button:active, .lg-quick a:active { transform: scale(1.08); }
+.btn:active, .lg-add button:active, .segmented button:active { transform: scale(1.04); }
+
+/* --- Barra in alto: trasparente, con i comandi in capsule di vetro --- */
+.topbar { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom: 0; isolation: isolate; gap: 6px; padding-bottom: 10px; }
+.topbar::before {
+  content: ""; position: absolute; inset: 0 0 -26px; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 78%, transparent), color-mix(in srgb, var(--bg) 30%, transparent) 70%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5); backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+.topbar.scrolled::before { opacity: 1; }
+.topbar.scrolled { border-bottom-color: transparent; }
+.brand { font-size: 1.22rem; font-weight: 800; letter-spacing: -.01em; }
+.brand img { border-radius: 8px; }
+.topbar .icon-btn { width: 40px; height: 40px; border-radius: 50%; color: var(--ink); }
+.topbar .icon-btn svg { display: block; }
+#btnBack { padding: 0; font-size: 1rem; }
+.tb-group { display: flex; align-items: center; border-radius: 99px; padding: 0 2px; flex: none; }
+.tb-group .icon-btn { background: transparent; background-image: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; width: 38px; height: 38px; }
+.tb-group .ic-sos { color: var(--danger); }
+.kid-chip { height: 40px; padding: 3px 12px 3px 4px; color: var(--ink); }
+.kid-dot { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35); }
+.net-chip { height: 40px; color: var(--ink); }
+
+/* --- Barra in basso: capsule di vetro flottante, la sezione attiva è una goccia più chiara --- */
+/* sopra i testi la barra deve restare leggibile: vetro un po' più pieno e più sfocato */
+.tabbar { border-radius: 38px; padding: 5px; background-color: color-mix(in srgb, var(--glass-strong) 82%, transparent); -webkit-backdrop-filter: blur(30px) saturate(2); backdrop-filter: blur(30px) saturate(2); }
+.tabbar a { border-radius: 32px; opacity: .82; padding: 6px 2px 5px; }
+.tabbar a.on {
+  opacity: 1; color: var(--accent-ink); background: var(--glass-pill);
+  box-shadow: 0 2px 10px rgba(70, 45, 30, .12), inset 0 1px 0 var(--glass-rim), inset 0 0 0 1px var(--glass-edge);
+}
+.tabbar a.on svg { filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--primary) 30%, transparent)); }
+
+/* --- Finestre dal basso: lastra di vetro staccata dai bordi --- */
+.sheet-backdrop { background: rgba(30, 18, 10, .22); }
+.sheet {
+  left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom) * .5 + 8px); max-height: calc(90vh - env(safe-area-inset-top));
+  border-radius: 34px; padding: 10px 18px 20px;
+  background-color: var(--glass-strong); background-image: var(--glass-sheen);
+  -webkit-backdrop-filter: blur(34px) saturate(1.8); backdrop-filter: blur(34px) saturate(1.8);
+  border: 1px solid var(--glass-edge);
+  box-shadow: 0 24px 70px rgba(30, 18, 10, .28), inset 0 1px 0 var(--glass-rim);
+  animation: glass-up .38s cubic-bezier(.2, 1.2, .4, 1);
+}
+.sheet::before { width: 38px; background: color-mix(in srgb, var(--muted) 45%, transparent); }
+@keyframes glass-up { from { transform: translateY(60px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* --- Avvisi: capsula di vetro scuro --- */
+.toast {
+  background-color: color-mix(in srgb, var(--ink) 80%, transparent); background-image: var(--glass-sheen);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(255, 255, 255, .14); border-radius: 22px; padding: 11px 18px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .22);
+}
+
+/* --- Contenuto: vetro smerigliato più pieno (senza sfocatura, per restare veloce) --- */
+.card, details.group, .lg-item, .lg-add button, .quick a, .stat, .mt-acts a, .wk-slot.full, .react-row button, .lg-pick button, .counter button, .shop-chk, .cal-d, .wk-d, .mh-card {
+  background-color: var(--glass-card); border-color: var(--glass-edge);
+  box-shadow: var(--glass-soft-shadow), inset 0 1px 0 var(--glass-rim);
+}
+.card, details.group, .mh-card { border-radius: var(--radius); }
+.lg-item, .lg-add button { border-radius: 20px; }
+.cal-d.off, .wk-slot:not(.full) { background-color: transparent; box-shadow: none; }
+.cal-d { box-shadow: inset 0 1px 0 var(--glass-rim); }
+.wk-slot:not(.full) { border-color: color-mix(in srgb, var(--muted) 30%, transparent); }
+.tint-peach { background-color: color-mix(in srgb, var(--primary-soft) 80%, transparent); }
+.tint-green { background-color: color-mix(in srgb, var(--green-soft) 80%, transparent); }
+.tint-yellow { background-color: color-mix(in srgb, var(--yellow-soft) 82%, transparent); }
+.tint-blue { background-color: color-mix(in srgb, var(--blue-soft) 80%, transparent); }
+.tint-pink { background-color: color-mix(in srgb, var(--pink-soft) 80%, transparent); }
+.tint-purple, .lg-live { background-color: color-mix(in srgb, var(--purple-soft) 80%, transparent); }
+.card[class*="tint-"], .lg-live { border-color: var(--glass-edge); }
+.sos { background-color: #C23B3B; background-image: linear-gradient(180deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 55%); border-color: rgba(255, 255, 255, .2); }
+.lg-ic, .big-emoji, .rd-ic { box-shadow: inset 0 1px 0 var(--glass-rim), inset 0 0 0 1px var(--glass-edge); }
+.big-emoji { border-radius: 18px; }
+
+/* --- Pulsanti: capsule; quello principale è vetro colorato --- */
+.btn {
+  border-radius: 99px; background-image: var(--glass-sheen);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--primary) 30%, transparent), inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -1px 0 rgba(0, 0, 0, .06);
+}
+.btn.small { border-radius: 99px; }
+.btn.ghost { background-color: var(--glass-card); color: var(--ink); border: 1px solid var(--glass-edge); box-shadow: var(--glass-soft-shadow), inset 0 1px 0 var(--glass-rim); }
+.btn.danger { background-color: color-mix(in srgb, var(--danger-soft) 85%, transparent); color: var(--danger); box-shadow: inset 0 1px 0 var(--glass-rim); }
+.mh-open { background-image: var(--glass-sheen); box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 32%, transparent), inset 0 1px 0 rgba(255, 255, 255, .45); }
+.mh-open i { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4); }
+
+/* --- Pastiglie, sottomenu e selettori --- */
+.chip { background-color: var(--glass-card); border-color: var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-rim); }
+.chip.on, .hubnav a.on { background-color: color-mix(in srgb, var(--ink) 88%, transparent); color: var(--bg); border-color: transparent; box-shadow: 0 4px 12px rgba(40, 25, 15, .18), inset 0 1px 0 rgba(255, 255, 255, .22); }
+.hubnav { padding-top: 4px; padding-bottom: 8px; }
+.hubnav a { color: var(--ink); }
+.segmented, .segmented.rd-seg {
+  padding: 4px; gap: 4px; border-radius: 20px; border: 1px solid var(--glass-edge);
+  background-color: color-mix(in srgb, var(--surface-2) 55%, transparent); box-shadow: inset 0 1px 3px rgba(70, 45, 30, .07);
+}
+.segmented button, .rd-seg button { border-radius: 16px; }
+.rd-seg button + button { border-left: 0; }
+.segmented button.on, .rd-seg button.on { background: var(--glass-pill); color: var(--ink); box-shadow: 0 2px 10px rgba(70, 45, 30, .12), inset 0 1px 0 var(--glass-rim); }
+.tag { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--glass-rim) 60%, transparent); }
+
+/* --- Campi: vetro incassato --- */
+input:not([type=checkbox]):not([type=radio]):not([type=file]), textarea, select, .shop-add input {
+  background-color: var(--glass-card); border: 1px solid var(--glass-edge); border-radius: 16px;
+  box-shadow: inset 0 1px 3px rgba(70, 45, 30, .08);
+}
+input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb, var(--primary) 70%, transparent); outline-offset: 1px; box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 14%, transparent); }
+
+/* --- Ricette e mese: lastre di vetro sopra le illustrazioni --- */
+.r-slide-card { background-color: var(--glass-strong); }
+.r-tile, .r-slide-img, .mt-img, .dish { box-shadow: var(--glass-soft-shadow), inset 0 0 0 1px var(--glass-edge); }
+.r-tile { border-radius: 20px; }
+.r-badge { color: #2F6B50; }
+.rd-btn { color: var(--ink); }
+.mh-badge { background-color: color-mix(in srgb, var(--pink-soft) 62%, transparent); border: 1px solid var(--glass-edge); }
+.mt-stats { background-color: color-mix(in srgb, var(--pink-soft) 82%, transparent); box-shadow: var(--glass-soft-shadow), inset 0 1px 0 var(--glass-rim); }
+.mt-tabs { border-bottom-color: var(--glass-edge); }
+.cook { background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: blur(40px) saturate(1.6); backdrop-filter: blur(40px) saturate(1.6); }
+.cook-top .rd-btn { background-color: var(--glass-card); }
+.cal-head .rd-btn { background-color: var(--glass); }
+.progress { box-shadow: inset 0 1px 2px rgba(70, 45, 30, .1); }
+.progress > i { background-image: linear-gradient(180deg, rgba(255, 255, 255, .35), rgba(255, 255, 255, 0)); }
+
+/* --- Senza sfocatura (browser vecchi) o con «Riduci trasparenza» attivo: vetro più pieno --- */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glass: rgba(255, 250, 245, .94); --glass-strong: rgba(255, 250, 245, .98); }
+  :root[data-theme="dark"] { --glass: rgba(42, 36, 33, .95); --glass-strong: rgba(36, 30, 27, .98); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root, :root[data-theme="dark"] { --glass: var(--surface); --glass-strong: var(--surface); --glass-card: var(--surface); }
+  body::before { display: none; }
+}
