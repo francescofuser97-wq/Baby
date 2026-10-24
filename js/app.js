@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  const VERSION = "5.4.0";
+  const VERSION = "5.5.0";
   const app = document.getElementById("app");
   const sheet = document.getElementById("sheet");
   const sheetBackdrop = document.getElementById("sheetBackdrop");
@@ -679,8 +679,8 @@
     }
 
     return `
-      ${a ? `<a class="mh-card" href="#/mese" aria-label="Apri l'aggiornamento del mese">
-        <figure>${window.babyArt ? babyArt(a.m) : ""}</figure>
+      ${a ? `<div class="mh-wrap"><a class="mh-card" href="#/mese" aria-label="Apri l'aggiornamento del mese">
+        <figure>${window.babyArt ? babyArt(a.m) : ""}${settings.photo ? `<img class="mh-photo" data-ph="${esc(settings.photo)}" alt="${name()}">` : ""}</figure>
         <span class="mh-name">${name()}</span>
         <span class="mh-day">Giorno ${a.total + 1}</span>
         ${a.m <= 24 ? `<span class="mh-badge"><b>${a.m}</b><small>${a.m === 1 ? "mese" : "mesi"}</small></span>` : ""}
@@ -690,7 +690,7 @@
           ${progress}
           <span class="mh-foot"><span>${a.m <= 24 ? "📆 Il tuo aggiornamento del mese" : "📆 Mese per mese"}</span><span class="mh-open">Apri <i>▶</i></span></span>
         </span>
-      </a>` : ""}
+      </a><label class="mh-cam" aria-label="${settings.photo ? "Cambia la foto" : "Aggiungi una foto"}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.2" r="3.4"/></svg><input type="file" accept="image/*" data-act="kid-photo" hidden></label></div>` : ""}
 
       ${sleepLiveCard()}
       ${todayDiaryCard()}
@@ -1154,12 +1154,18 @@
     return c.map(x => `<span class="tag">${x}</span>`).join("");
   }
   const foodName = id => (FOODS.find(f => f.id === id) || { n: id }).n;
+  // Cacca: [chiave, etichetta del pulsante, testo nel diario, da segnalare al pediatra]
+  const POO_CONS = [["liquida", "💧 Liquida", "liquida"], ["molle", "Molle", "molle"], ["morbida", "Morbida", "morbida"], ["formata", "Formata", "formata"], ["dura", "Dura, a palline", "dura"]];
+  const POO_COL = [["gialla", "🟡 Gialla", "gialla"], ["verde", "🟢 Verde", "verde"], ["marrone", "🟤 Marrone", "marrone"], ["nera", "⚫ Nera", "nera", 1], ["rossa", "🔴 Con sangue", "con sangue", 1], ["bianca", "⚪ Bianca o grigia", "bianca o grigia", 1]];
   function logTitle(x) {
     switch (x.type) {
       case "pasto": return (x.foods || []).map(foodName).join(", ") || "Pappa";
       case "latte": return x.kind === "biberon" ? "Biberon" + (x.ml ? " · " + x.ml + " ml" : "") : "Seno" + (x.side ? " " + ({ sx: "sinistro", dx: "destro", entrambi: "entrambi" })[x.side] : "") + (x.min ? " · " + x.min + " min" : "");
       case "sonno": return x.end ? "Nanna di " + durTxt(sleepMin(x)) : "Sta dormendo da " + durTxt(sleepMin(x));
-      case "pannolino": return ({ pipi: "Pipì", cacca: "Cacca", entrambi: "Pipì e cacca" })[x.kind] || "Pannolino";
+      case "pannolino": {
+        const cons = (POO_CONS.find(c => c[0] === x.cons) || [])[2], col = POO_COL.find(c => c[0] === x.col);
+        return [({ pipi: "Pipì", cacca: "Cacca", entrambi: "Pipì e cacca" })[x.kind] || "Pannolino", cons, col ? col[2] + (col[3] ? " ⚠️" : "") : ""].filter(Boolean).join(" · ");
+      }
       case "misure": return [x.w ? String(x.w).replace(".", ",") + " kg" : "", x.l ? String(x.l).replace(".", ",") + " cm" : "", x.h ? "testa " + String(x.h).replace(".", ",") + " cm" : ""].filter(Boolean).join(" · ");
       case "salute": return [x.temp ? String(x.temp).replace(".", ",") + " °C" : "", x.sym || "", x.med ? "💊 " + x.med : ""].filter(Boolean).join(" · ") || "Salute";
       case "traguardo": return x.t || "Una prima volta";
@@ -1296,6 +1302,12 @@
 
   // Modulo per aggiungere o modificare una voce
   let pendingPhotos = [], resizing = 0;
+  // Allattamento scelto nelle impostazioni: seno, artificiale (biberon) o misto (come l'ultima poppata segnata)
+  function defaultMilk() {
+    if (settings.feed === "artificiale") return "biberon";
+    if (settings.feed === "misto") { const last = diaryAll().filter(x => x.type === "latte" && x.kind).sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || ""))).pop(); return last ? last.kind : "seno"; }
+    return "seno";
+  }
   function openLog(type, date, id) {
     const x = id ? diary.find(v => v.id === id) : null;
     type = x ? x.type : type;
@@ -1319,8 +1331,9 @@
         <div class="field"><span>Quanto?</span></div>${pick("q", [["poco", "Poco"], ["meta", "Metà"], ["tutto", "Tutto"]], v.q || "")}
         <div class="field"><span>Com'è andata?</span></div>${pick("r", Object.keys(REACT).map(k => [k, REACT[k][0] + " " + REACT[k][1]]), v.r || "si")}` + note;
     } else if (type === "latte") {
-      f = time("time", "Ora", v.time || nowHM()) + `<div class="field"><span>Come?</span></div>${pick("kind", [["seno", "🤱 Seno"], ["biberon", "🍼 Biberon"]], v.kind || "seno")}
-        <div class="field"><span>Lato (seno)</span></div>${pick("side", [["sx", "Sinistro"], ["dx", "Destro"], ["entrambi", "Entrambi"]], v.side || "")}
+      const kind = v.kind || defaultMilk();
+      f = time("time", "Ora", v.time || nowHM()) + `<div class="field"><span>Come?</span></div>${pick("kind", [["seno", "🤱 Seno"], ["biberon", "🍼 Biberon"]], kind)}
+        <div id="lgSide"${kind === "seno" ? "" : " hidden"}><div class="field"><span>Lato</span></div>${pick("side", [["sx", "Sinistro"], ["dx", "Destro"], ["entrambi", "Entrambi"]], v.side || "")}</div>
         <div class="cols"><label class="field"><span>Quantità (ml)</span><input type="number" inputmode="numeric" name="ml" min="0" max="400" value="${esc(v.ml || "")}" placeholder="Biberon"></label>
         <label class="field"><span>Durata (min)</span><input type="number" inputmode="numeric" name="min" min="0" max="120" value="${esc(v.min || "")}" placeholder="Seno"></label></div>` + note;
     } else if (type === "sonno") {
@@ -1328,7 +1341,13 @@
         <p class="small muted" style="margin-top:-6px">Lascia vuoto «svegliato» se sta ancora dormendo: lo segni dopo con un tocco. Se si sveglia dopo mezzanotte, va bene lo stesso.</p>
         <div class="field"><span>Tipo</span></div>${pick("kind", [["nanna", "☀️ Nanna di giorno"], ["notte", "🌙 Notte"]], v.kind || (toMin(nowHM()) > 19 * 60 || toMin(nowHM()) < 6 * 60 ? "notte" : "nanna"))}` + note;
     } else if (type === "pannolino") {
-      f = time("time", "Ora", v.time || nowHM()) + `<div class="field"><span>Com'era?</span></div>${pick("kind", [["pipi", "💧 Pipì"], ["cacca", "💩 Cacca"], ["entrambi", "Entrambi"]], v.kind || "pipi")}` + note;
+      const poo = ["cacca", "entrambi"].includes(v.kind);
+      f = time("time", "Ora", v.time || nowHM()) + `<div class="field"><span>Com'era?</span></div>${pick("kind", [["pipi", "💧 Pipì"], ["cacca", "💩 Cacca"], ["entrambi", "Entrambi"]], v.kind || "pipi")}
+        <div id="lgPoo"${poo ? "" : " hidden"}>
+          <div class="field"><span>Consistenza</span></div>${pick("cons", POO_CONS.map(([k, l]) => [k, l]), v.cons || "")}
+          <div class="field"><span>Colore</span></div>${pick("col", POO_COL.map(([k, l]) => [k, l]), v.col || "")}
+          <p class="small muted" style="margin:-4px 0 12px">Gialla, verde o marrone sono tutte normali, e cambiano con la pappa. ⚠️ <b>Bianca o grigia, nera</b> (dopo i primi giorni di vita) <b>o con sangue</b>: senti subito il pediatra.</p>
+        </div>` + note;
     } else if (type === "salute") {
       f = time("time", "Ora", v.time || nowHM()) + `<div class="cols"><label class="field"><span>Temperatura (°C)</span><input type="text" inputmode="decimal" name="temp" value="${esc(v.temp || "")}" placeholder="Es. 37,8"></label>
         <label class="field"><span>Farmaco e dose</span><input type="text" name="med" value="${esc(v.med || "")}" placeholder="Es. paracetamolo 2,5 ml"></label></div>
@@ -1389,7 +1408,10 @@
       if (!x.time) { toast("Indica quando si è addormentato"); return false; }
       x.endDate = x.end ? (toMin(x.end) < toMin(x.time) ? iso(addDays(parseISO(d), 1)) : d) : null;
     }
-    else if (type === "pannolino") x.kind = g("kind");
+    else if (type === "pannolino") {
+      x.kind = g("kind");
+      if (["cacca", "entrambi"].includes(x.kind)) { x.cons = g("cons"); x.col = g("col"); } else { delete x.cons; delete x.col; }
+    }
     else if (type === "salute") { x.temp = g("temp").replace(",", "."); x.med = g("med"); x.sym = g("sym"); if (!x.temp && !x.med && !x.sym && !x.note) { toast("Scrivi almeno una cosa"); return false; } }
     else if (type === "traguardo") x.t = g("t");
     else if (type === "nota") { x.t = g("t"); x.mood = g("mood"); }
@@ -1959,6 +1981,7 @@
         ${MILESTONES.map((x, xi) => { const done = x.items.filter(i => msOf(i)).length; return `<div class="card ${x === cur ? "tint-green" : ""}">
           <div class="card-kicker">${x === cur ? "📍 Questa età · " : ""}${x.t}<span style="margin-left:auto">${done}/${x.items.length}</span></div>
           ${x.items.map(i => { const d = msOf(i); return `<button class="ms-row${d ? " on" : ""}" data-act="ms-toggle" data-k="${msKey(i)}"><span class="ms-chk">${d ? "✓" : ""}</span><span class="grow">${esc(i)}${d ? `<small>il ${fmt(parseISO(d.date), { day: "numeric", month: "long" })}</small>` : ""}</span></button>`; }).join("")}
+          ${(window.MILESTONE_GEAR || [])[xi] ? `<details class="ms-gear"${x === cur ? " open" : ""}><summary>🧰 Cosa può servire in questa fase</summary><ul>${MILESTONE_GEAR[xi].map(w => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}
           ${WATCH_FLAGS[xi] ? `<details class="ms-watch"><summary>🩺 Quando parlarne con il pediatra</summary><ul>${WATCH_FLAGS[xi].map(w => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}
           ${x === cur ? `<button class="link-btn small" data-act="set" data-k="playTab" data-v="giochi" style="margin-top:8px">🧸 Giochi per accompagnarlo in questa fase ›</button>` : ""}
         </div>`; }).join("")}
@@ -2494,6 +2517,9 @@
     return `<div class="note small">📚 Leggere ad alta voce ogni giorno, anche pochi minuti, fa bene al linguaggio e al legame tra voi. In biblioteca trovate questi libri e molti altri: la tessera è gratuita anche per lui.</div>
       <div class="section-title"><h2>Libri per questa età</h2></div>${now.map(bookCard).join("") || `<p class="small muted">Nessun libro in elenco per questa età.</p>`}
       ${later.length ? `<details class="group"><summary>Per più avanti (${later.length})</summary><div style="padding:0 12px 4px">${later.map(bookCard).join("")}</div></details>` : ""}
+      <div class="section-title"><h2>📖 Per mamma e papà</h2></div>
+      <p class="small muted" style="margin-top:-4px">Letture consigliate su pappa, sonno, sviluppo ed educazione. Si trovano in biblioteca o in libreria; prendile come spunti, non come regole.</p>
+      ${(window.PARENT_BOOKS || []).map(g => `<details class="group"><summary>${esc(g.cat)} <span class="small muted" style="margin-left:auto;margin-right:8px">${g.items.length}</span></summary><div style="padding:0 16px 8px">${g.items.map(b => `<div class="pb-row"><b>${esc(b.t)}</b><div class="small muted">${esc(b.a)}</div><p class="small" style="margin:4px 0 0">${esc(b.d)}</p><a class="small" href="https://www.google.com/search?q=${encodeURIComponent(b.t + " " + b.a + " libro")}" target="_blank" rel="noopener">Cerca il libro ›</a></div>`).join("")}</div></details>`).join("")}
       <div class="section-title"><h2>🎵 Filastrocche e ninne nanne</h2></div>
       ${rhymes.map(r => `<details class="group"><summary>${esc(r.t)} <span class="small muted" style="margin-left:auto;margin-right:8px">${r.min}+ mesi</span></summary>
         <div style="padding:0 16px 14px"><p class="rhyme">${esc(r.txt)}</p><p class="small muted" style="margin:0">👐 ${esc(r.g)}</p></div></details>`).join("")}`;
@@ -3048,7 +3074,7 @@
   const isRO = () => { const c = raw.get("sync", null); return !!(c && c.ro); };
   const RO_BLOCK = new Set(["log-add", "log-del", "sleep-start", "sleep-stop", "food", "food-again", "food-del", "g-add", "g-del", "ap-add", "ap-del", "ready", "done", "fav",
     "kid-add", "kid-del", "ms-toggle", "plan-slot", "plan-auto", "plan-clear", "shop-add-plan", "shop-toggle", "shop-del", "shop-clear", "rem-add", "rem-done", "rem-del", "ev-add", "ev-del", "home-open", "sync-newfamily", "sync-encrypt", "backup-restore",
-    "al-offer", "al-intro", "h-toggle", "q-add", "q-del", "q-toggle", "plan-set", "set-meals", "vid-del", "vid-add"]);
+    "al-offer", "al-intro", "kid-photo-del", "h-toggle", "q-add", "q-del", "q-toggle", "plan-set", "set-meals", "vid-del", "vid-add"]);
   // Chi usa questo telefono: compare sulle voci del diario e della spesa
   const me = () => String(raw.get("me", "") || "");
   // Modifiche fatte qui e non ancora arrivate al servizio (per l'indicatore in alto)
@@ -3257,6 +3283,11 @@
         <label class="field"><span>Nome</span><input type="text" name="name" value="${esc(settings.name || "")}" autocomplete="off"></label>
         <label class="field"><span>Data di nascita</span><input type="date" name="birth" value="${esc(settings.birth || "")}" max="${iso(today0())}" required></label>
         <label class="field"><span>Curve di crescita</span><select name="sex"><option value="m" ${settings.sex !== "f" ? "selected" : ""}>Maschio</option><option value="f" ${settings.sex === "f" ? "selected" : ""}>Femmina</option></select></label>
+        <label class="field"><span>Allattamento</span><select name="feed">${[["seno", "🤱 Al seno"], ["artificiale", "🍼 Artificiale (biberon)"], ["misto", "🤱🍼 Misto"]].map(([k, l]) => `<option value="${k}" ${(settings.feed || "seno") === k ? "selected" : ""}>${l}</option>`).join("")}</select>
+          <small class="muted">Nel diario «Latte» parte già con seno o biberon; con il misto ripropone l'ultimo che hai segnato.</small></label>
+        <div class="field"><span>Foto nella pagina Oggi</span></div>
+        <div class="btn-row" style="margin:0 0 14px"><label class="btn ghost small" style="cursor:pointer">📷 ${settings.photo ? "Cambia foto" : "Scegli una foto"}<input type="file" accept="image/*" data-act="kid-photo" hidden></label>
+          ${settings.photo ? `<button class="btn ghost small" type="button" data-act="kid-photo-del">Togli la foto</button>` : ""}</div>
         <div class="btn-row" style="margin-top:0"><button class="btn" type="submit">Salva</button>
           ${kids.length > 1 ? `<button class="btn danger" type="button" data-act="kid-del">Elimina profilo</button>` : ""}</div>
       </form>
@@ -3399,7 +3430,14 @@
       case "g-edit": openAddGrowth(null, t.dataset.id); break;
       case "log-del": if (confirm("Eliminare questa voce del diario?")) { deleteLog(t.dataset.id); closeSheet(); render(true); } break;
       case "lg-pick": { const box = t.closest(".lg-pick"), inp = box.nextElementSibling, on = t.classList.contains("on") && box.dataset.name !== "kind" && box.dataset.name !== "r";
-        box.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === t && !on)); inp.value = on ? "" : t.dataset.v; break; }
+        box.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === t && !on)); inp.value = on ? "" : t.dataset.v;
+        // consistenza e colore solo per la cacca, il lato solo per il seno
+        if (box.dataset.name === "kind") {
+          const poo = sheet.querySelector("#lgPoo"), side = sheet.querySelector("#lgSide");
+          if (poo) poo.hidden = !["cacca", "entrambi"].includes(inp.value);
+          if (side) side.hidden = inp.value !== "seno";
+        }
+        break; }
       case "lg-food": { t.classList.toggle("on"); const inp = sheet.querySelector("input[name=foods]");
         inp.value = [...sheet.querySelectorAll("#lgFoods .chip.on")].map(b => b.dataset.id).join(","); break; }
       case "lg-fill": { const inp = sheet.querySelector("input[name=t]"); if (inp) inp.value = t.dataset.v; break; }
@@ -3429,6 +3467,9 @@
         break;
       case "sync-leave":
         if (confirm("Scollegare questo telefono? I dati restano qui, ma non si aggiorneranno più con quelli della famiglia.")) { raw.del("sync"); toast("Telefono scollegato"); render(true); }
+        break;
+      case "kid-photo-del":
+        if (settings.photo && confirm("Togliere la foto? Tornerà l'illustrazione.")) { dropPhoto(settings.photo); settings = Object.assign({}, settings); delete settings.photo; S.set("settings", settings); render(true); }
         break;
       case "photo-del":
         closeSheet();
@@ -3530,7 +3571,7 @@
           // le foto del diario di tutti i figli, dentro lo stesso file
           toast("Preparo il file con le foto…");
           data.photos = {};
-          const ids = kids.flatMap(k => (raw.get("k." + k.id + ".diary", []) || []).filter(x => !x.del).flatMap(x => x.photos || []));
+          const ids = kids.flatMap(k => (raw.get("k." + k.id + ".diary", []) || []).filter(x => !x.del).flatMap(x => x.photos || [])).concat(kids.map(k => k.photo).filter(Boolean));
           for (const pid of ids) { const b = await PhotoDB.get("d:" + pid).catch(() => null) || await fetchSharedPhoto(pid); if (b) data.photos[pid] = bytesToB64u(new Uint8Array(await b.arrayBuffer())); }
         }
         download("piccoli-passi-" + (act === "export-photos" ? "completo-" : "backup-") + iso(today0()) + ".json", JSON.stringify(data), "application/json");
@@ -3573,6 +3614,23 @@
         pendingPhotos.push({ id: pid, blob });
         if (prev) prev.insertAdjacentHTML("beforeend", `<span data-new="${pid}"><img src="${u}" alt=""><button type="button" data-act="lg-unphoto" aria-label="Togli">✕</button></span>`);
       }).catch(() => toast("Non riesco a leggere questa foto")).finally(() => { resizing--; }); });
+      return;
+    }
+    if (e.target.dataset && e.target.dataset.act === "kid-photo" && e.target.files[0]) {
+      const file = e.target.files[0];
+      e.target.value = "";
+      if (isRO()) { toast("👀 Sei in sola lettura: puoi guardare tutto, ma non modificare"); return; }
+      toast("Preparo la foto…");
+      resizeImage(file, 1440).then(blob => {
+        const pid = "kid" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), old = settings.photo;
+        return PhotoDB.set("d:" + pid, blob).then(() => {
+          if (old) dropPhoto(old);
+          settings = Object.assign({}, settings, { photo: pid }); S.set("settings", settings);
+          // con la condivisione attiva la foto parte cifrata, come quelle del diario
+          raw.set("photoQueue", (raw.get("photoQueue", []) || []).concat(pid)); uploadPhotos();
+          toast("Foto salvata 📷"); render(true);
+        });
+      }).catch(() => toast("Non riesco a usare questa foto"));
       return;
     }
     if (e.target.dataset && e.target.dataset.act === "photo" && e.target.files[0]) {
@@ -3626,6 +3684,7 @@
       if (!birth) return;
       settings = Object.assign({}, settings || {}, { name: String(fd.get("name") || "").trim(), birth });
       if (fd.get("sex")) settings.sex = fd.get("sex");
+      if (fd.get("feed")) settings.feed = fd.get("feed");
       S.set("settings", settings);
       if (f.id === "welcomeForm") switchKid(activeKid);
       if (f.id === "settingsForm") toast("Salvato ✅");

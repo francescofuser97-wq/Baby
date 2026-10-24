@@ -918,3 +918,22 @@ input:focus, textarea:focus, select:focus { outline: 2px solid color-mix(in srgb
   :root, :root[data-theme="dark"] { --glass: var(--surface); --glass-strong: var(--surface); --glass-card: var(--surface); }
   body::before { display: none; }
 }
+
+/* Foto del bimbo nel riquadro di Oggi, con il pulsante di vetro per cambiarla */
+.mh-wrap { position: relative; }
+.mh-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mh-photo.missing { display: none; }
+.mh-cam {
+  position: absolute; top: 14px; right: 14px; z-index: 4; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; cursor: pointer; color: #fff;
+  background-color: rgba(255, 255, 255, .22); background-image: var(--glass-sheen); border: 1px solid rgba(255, 255, 255, .35);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: 0 6px 18px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .5);
+  transition: transform .35s cubic-bezier(.3, 1.6, .5, 1);
+}
+.mh-cam:active { transform: scale(1.1); }
+/* Tappe: oggetti utili */
+.ms-gear { margin-top: 10px; padding: 8px 12px; border-radius: 14px; background: color-mix(in srgb, var(--blue-soft) 80%, transparent); }
+.ms-gear summary { cursor: pointer; font-weight: 700; font-size: .9rem; }
+.ms-gear ul { margin: 8px 0 0; font-size: .9rem; }
+/* Libri per i genitori */
+.pb-row { padding: 10px 0; border-top: 1px solid var(--line); }
+.pb-row:first-child { border-top: 0; }

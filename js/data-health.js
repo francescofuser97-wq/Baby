@@ -239,3 +239,67 @@ window.EMERGENCY_VIDEOS = [
   { id: "d7088oX4VKc", t: "Manovre salvavita pediatriche", src: "Croce Rossa Italiana" },
   { id: "uwo8RleF2GY", t: "Lattante (0-12 mesi): manovre di disostruzione delle vie aeree", src: "Video formativo" }
 ];
+
+/* Libri per i genitori: titoli noti e reperibili in italiano (in biblioteca o in libreria) */
+window.PARENT_BOOKS = [
+  { cat: "🥣 Pappa e svezzamento", items: [
+    { t: "Io mi svezzo da solo!", a: "Lucio Piermarini", d: "Lo svezzamento «a tavola con noi», spiegato da un pediatra con dialoghi semplici e tanto buon senso." },
+    { t: "Il mio bambino non mi mangia", a: "Carlos González", d: "Per chi si preoccupa delle quantità: perché i bambini sanno regolarsi e come evitare le lotte a tavola." }
+  ]},
+  { cat: "🤱 Allattamento", items: [
+    { t: "Un dono per tutta la vita", a: "Carlos González", d: "Guida pratica all'allattamento: posizioni, ritmi, ritorno al lavoro, difficoltà più comuni." }
+  ]},
+  { cat: "😴 Sonno", items: [
+    { t: "Dormire senza lacrime", a: "Rosa Jové", d: "Come cambia il sonno nei primi anni e cosa aspettarsi, senza metodi rigidi." },
+    { t: "Besame mucho", a: "Carlos González", d: "Crescere i figli con affetto e vicinanza: sonno, pianto, coccole e regole." }
+  ]},
+  { cat: "🧠 Sviluppo e cervello", items: [
+    { t: "Il cervello del bambino spiegato ai genitori", a: "Álvaro Bilbao", d: "Come si sviluppa il cervello nei primi anni e piccoli gesti quotidiani per accompagnarlo." },
+    { t: "12 strategie rivoluzionarie per favorire lo sviluppo mentale del bambino", a: "Daniel J. Siegel, Tina Payne Bryson", d: "Emozioni, capricci e paure spiegati con il funzionamento del cervello, con esempi pratici." },
+    { t: "Il bambino in famiglia", a: "Maria Montessori", d: "Le idee di fondo del metodo Montessori: rispetto, autonomia e un ambiente a misura di bambino." }
+  ]},
+  { cat: "💬 Educazione e comunicazione", items: [
+    { t: "Il bambino è competente", a: "Jesper Juul", d: "Relazione, rispetto e confini in famiglia: un classico della pedagogia moderna." },
+    { t: "Come parlare perché i bambini ti ascoltino e come ascoltare perché ti parlino", a: "Adele Faber, Elaine Mazlish", d: "Frasi ed esempi concreti per la vita di tutti i giorni, utili soprattutto dai 2 anni." },
+    { t: "I no che aiutano a crescere", a: "Asha Phillips", d: "Perché i limiti, detti con calma, fanno bene ai bambini e ai genitori." }
+  ]}
+];
+
+/* Oggetti che possono servire nelle varie fasi (stesso ordine delle tappe: 4-6, 6-9, 9-12, 12-18, 18-24 mesi) */
+window.MILESTONE_GEAR = [
+  [
+    "Tappetino morbido per stare a pancia in giù e giocare a terra",
+    "Massaggiagengive da tenere in frigo (non nel freezer): arrivano i primi dentini",
+    "Seggiolone (o rialzo) con schienale dritto e poggiapiedi, per lo svezzamento",
+    "Bavaglini con le maniche, cucchiaini morbidi e una ciotola con ventosa",
+    "Bicchiere aperto piccolo o tazza con beccuccio morbido per l'acqua"
+  ],
+  [
+    "Paraspigoli sui tavoli bassi e sui mobili ad altezza di testa: arriva il gattonamento",
+    "Copriprese e blocca-ante per i mobili bassi (detersivi e farmaci sempre in alto)",
+    "Cancelletti in cima e in fondo alle scale",
+    "Mobili fissati al muro (librerie, cassettiere, TV): si arrampicherà",
+    "Seggiolino auto del gruppo successivo quando supera altezza o peso dell'ovetto (verso i 12-15 mesi, controlla le indicazioni del seggiolino)"
+  ],
+  [
+    "Fermaporte per non schiacciarsi le dita",
+    "Carrellino primi passi da spingere (il girello è sconsigliato dai pediatri)",
+    "Scarpine morbide solo per uscire: in casa meglio a piedi nudi o con calze antiscivolo",
+    "Blocca-cassetti e lucchetti per il frigorifero o il bidone",
+    "Barriere per camino o stufa, se presenti"
+  ],
+  [
+    "Protezione per le manopole del fornello e paraspigoli ancora al loro posto",
+    "Seggiolino da bici o rimorchio con casco omologato, se andate in bicicletta",
+    "Sgabello stabile per lavarsi le mani al lavandino",
+    "Tazza e posate a misura di bambino: mangia da solo",
+    "Zainetto o porta-pannolini comodo per le uscite: è sempre in movimento"
+  ],
+  [
+    "Vasino o riduttore per il WC, quando mostra interesse (di solito tra i 2 e i 3 anni)",
+    "Bici senza pedali o triciclo, con casco",
+    "Lettino con sponde o letto basso quando esce dalla culla",
+    "Sicurezza per finestre e balconi: nessun mobile o vaso su cui arrampicarsi vicino ai parapetti",
+    "Mensole basse per giochi e libri: li sceglie e li rimette a posto da solo"
+  ]
+];
